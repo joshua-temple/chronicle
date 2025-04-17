@@ -8,6 +8,8 @@ Chronicle is a comprehensive testing framework for Golang that enables robust in
 - **Scenario-Based Testing**: Build and compose test scenarios using a fluent builder pattern
 - **Continuous Testing**: Run scenarios continuously with randomized inputs for chaos testing
 - **Extensible Architecture**: Easily extend with custom providers, components, and generators
+- **Suite & Test Separation**: Clear separation between suite-level and test-level constructs
+- **Type-Safe Identifiers**: Strongly-typed identifiers for tests, services, and components
 
 ## Getting Started
 
@@ -49,6 +51,30 @@ func TestExample(t *testing.T) {
 ### Core
 
 The `core` package provides the foundation of the framework with types and interfaces that define test contexts, infrastructure providers, services, and more.
+
+#### Type-Safe Identifiers
+
+Chronicle supports strongly-typed identifiers for tests, services, components, and more:
+
+```go
+// Define typed identifiers
+const (
+    // Service IDs
+    RedisService core.ServiceID = "infrastructure.redis"
+    
+    // Test IDs
+    UserCreationTest core.TestID = "user.creation"
+    
+    // Component IDs
+    SetupDatabaseComp core.ComponentID = "components.setup.database"
+)
+
+// Use typed identifiers
+registry := core.NewIDRegistry()
+registry.RegisterServiceID(RedisService)
+registry.RegisterTestID(UserCreationTest)
+registry.RegisterComponentID(SetupDatabaseComp)
+```
 
 ### Infrastructure Providers
 
@@ -121,54 +147,77 @@ ctx := scenarios.NewContext()
 err := scenario.Execute(ctx)
 ```
 
+### Suite Framework
+
+The Suite framework provides a way to manage groups of related tests with shared infrastructure:
+
+```go
+import (
+    "github.com/joshua-temple/chronicle/suite"
+    "github.com/joshua-temple/chronicle/core"
+)
+
+// Create a suite
+testSuite := suite.NewSuite(core.SuiteID("user-suite"))
+testSuite.WithDescription("User Management Suite")
+testSuite.WithInfraProvider(provider)
+testSuite.WithGlobalSetup(setupDatabase)
+testSuite.WithGlobalTeardown(cleanupDatabase)
+
+// Register components with the suite
+testSuite.RegisterComponent(core.ComponentID("setup"), setupDatabase)
+testSuite.RegisterComponent(core.ComponentID("create"), createUser)
+
+// Create tests
+userCreationTest := suite.NewTest(core.TestID("user.create"))
+userCreationTest.WithComponents(core.ComponentID("create"))
+userCreationTest.WithStateAccess(suite.ReadWrite)
+
+// Add tests to the suite
+testSuite.AddTests(userCreationTest)
+
+// Run the suite
+err := testSuite.Run(context.Background())
+```
+
 ### Daemon Service
 
-The Daemon service provides continuous testing capabilities:
+The Daemon service provides continuous testing capabilities with enhanced configuration:
 
 ```go
 import (
     "github.com/joshua-temple/chronicle/daemon"
 )
 
-// Create component registry
-registry := daemon.NewComponentRegistry()
+// Create enhanced daemon configuration
+config := daemon.NewEnhancedDaemonConfig()
+config.MaxConcurrency = 5
+config.GlobalThrottleRate = 30 // Max 30 test starts per minute
+config.ShutdownGracePeriod = 30 * time.Second
 
-// Register test components
-registry.RegisterComponent("CreateUser", createUserComponent)
-registry.RegisterComponent("ValidateUser", validateUserComponent)
-
-// Configure the daemon
-config := daemon.DaemonConfig{
-    TestSets: []daemon.TestSet{
+// Configure time windows
+userTestConfig := &daemon.TestExecutionConfig{
+    Frequency:       5 * time.Minute,
+    MaxParallelSelf: 1,
+    Jitter:          30 * time.Second,
+    TimeWindows: []daemon.TimeWindow{
         {
-            Name:              "UserManagement",
-            Components:        []string{"CreateUser", "ValidateUser"},
-            SelectionStrategy: daemon.RandomSelection,
-            ExecutionWeight:   1,
-            ParameterGenerators: map[string]scenarios.Generator{
-                "username": &scenarios.StringGenerator{
-                    MinLength: 5,
-                    MaxLength: 10,
-                },
-            },
+            DaysOfWeek: []time.Weekday{time.Monday, time.Friday},
+            StartTime:  "09:00",
+            EndTime:    "17:00",
+            TimeZone:   "America/New_York",
         },
     },
-    MaxConcurrency:    2,
-    ExecutionInterval: 500 * time.Millisecond,
-    TotalRunTime:      1 * time.Minute,
 }
 
-// Create and start the daemon
-d := daemon.NewDaemon(config)
+// Add test config
+config.TestConfigs[core.TestID("user.creation")] = userTestConfig
 
-// Register components
-for _, name := range registry.ListComponents() {
-    comp, _ := registry.GetComponent(name)
-    d.RegisterComponent(name, comp)
-}
-
-// Start the daemon
-d.Start()
+// Create and start the scheduler
+store := daemon.NewTestScenarioStore()
+logger := daemon.NewDefaultLogger()
+scheduler := daemon.NewExecutionScheduler(config, store, logger)
+scheduler.Start()
 ```
 
 ## Advanced Features
@@ -221,9 +270,37 @@ config.OutputHandlers = []daemon.OutputHandler{
 }
 ```
 
+### Suite and Test Separation
+
+Chronicle clearly separates suite-level and test-level concerns:
+
+- **Suite**: Manages infrastructure, coordinates tests, and provides shared state
+- **Test**: Focuses on specific functionality with clear dependencies
+
+Benefits:
+- Improved organization of related tests
+- Centralized management of infrastructure
+- Coordinated setup and teardown
+- Dependency-based test ordering
+- Controlled state sharing between tests
+
+### Enhanced Daemon Features
+
+The enhanced daemon configuration provides:
+
+- **Time Windows**: Run tests only during specific days and times
+- **Jitter**: Add randomness to scheduling to prevent resource contention
+- **Resource Limits**: Control CPU, memory, and disk usage
+- **Quota Management**: Limit test execution frequency
+- **Quarantine**: Automatically disable tests after consecutive failures
+- **Chaos Testing**: Introduce controlled chaos to test resilience
+
 ## Example
 
-See the `examples/` directory for complete usage examples.
+See the `examples/` directory for complete usage examples, including:
+- `examples/simple_test.go` - Basic usage
+- `examples/scenario_test.go` - Scenario-based testing
+- `examples/enhanced_test.go` - Suite pattern and enhanced daemon
 
 ## License
 
