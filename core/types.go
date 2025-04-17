@@ -110,6 +110,15 @@ func (ds *DataStore) Get(key string) (interface{}, bool) {
 	return value, ok
 }
 
+// AsMap returns a copy of the internal data as a map
+func (ds *DataStore) AsMap() map[string]interface{} {
+	result := make(map[string]interface{})
+	for key, value := range ds.data {
+		result[key] = value
+	}
+	return result
+}
+
 // GetString retrieves a string value from the DataStore
 func (ds *DataStore) GetString(key string) (string, bool) {
 	value, ok := ds.data[key]
