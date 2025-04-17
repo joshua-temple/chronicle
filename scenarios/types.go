@@ -181,6 +181,11 @@ func (c *Context) Cancel() {
 	c.cancel()
 }
 
+// Store returns the context's data store
+func (c *Context) Store() *core.DataStore {
+	return c.store
+}
+
 // Parameter defines a parameter with optional generator for a scenario
 type Parameter struct {
 	Name        string
