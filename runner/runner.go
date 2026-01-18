@@ -21,20 +21,16 @@ func RunTest(t *testing.T, testFunc core.TestRunner, opts ...core.TestOption) {
 	// Apply middleware
 	runner := applyMiddleware(testFunc, tc.Middleware)
 
-	// Initialize infrastructure if provided
+	// Initialize and start infrastructure if provided
 	if tc.InfraProvider != nil {
-		t.Log("Initializing infrastructure...")
-		if err := tc.InfraProvider.Initialize(ctx); err != nil {
-			t.Fatalf("Failed to initialize infrastructure: %v", err)
-		}
+		t.Log("Starting infrastructure...")
+		stop := tc.InfraProvider.Start(ctx)
 
 		// Ensure cleanup based on reuse behavior
 		defer func() {
 			if tc.ReuseBehavior == core.AlwaysFresh {
 				t.Log("Cleaning up infrastructure...")
-				if err := tc.InfraProvider.Stop(ctx); err != nil {
-					t.Logf("Warning: Failed to stop infrastructure: %v", err)
-				}
+				stop(ctx)
 			} else if tc.ReuseBehavior == core.ReuseWithFlush {
 				t.Log("Flushing infrastructure state...")
 				if err := tc.InfraProvider.Flush(ctx); err != nil {
@@ -42,12 +38,6 @@ func RunTest(t *testing.T, testFunc core.TestRunner, opts ...core.TestOption) {
 				}
 			}
 		}()
-
-		// Start infrastructure
-		t.Log("Starting infrastructure...")
-		if err := tc.InfraProvider.Start(ctx); err != nil {
-			t.Fatalf("Failed to start infrastructure: %v", err)
-		}
 	}
 
 	// Run the test

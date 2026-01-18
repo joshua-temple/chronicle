@@ -3,8 +3,10 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
+	"testing"
 
 	"github.com/docker/go-connections/nat"
 	"github.com/joshua-temple/chronicle/core"
@@ -19,6 +21,10 @@ type TestContainersProvider struct {
 	networks     map[string]*testcontainers.DockerNetwork
 	containers   map[string]testcontainers.Container
 	mutex        sync.Mutex
+
+	// TestMain lifecycle fields
+	testMain *testing.M // nil for per-test mode
+	exitCode int        // captured from m.Run()
 }
 
 // NewTestContainersProvider creates a new TestContainers provider
@@ -29,6 +35,13 @@ func NewTestContainersProvider() *TestContainersProvider {
 		networks:     make(map[string]*testcontainers.DockerNetwork),
 		containers:   make(map[string]testcontainers.Container),
 	}
+}
+
+// WithTestMain configures the provider for TestMain lifecycle management.
+// When set, Start() will execute m.Run() and capture the exit code.
+func (p *TestContainersProvider) WithTestMain(m *testing.M) *TestContainersProvider {
+	p.testMain = m
+	return p
 }
 
 // Initialize prepares the infrastructure
@@ -68,8 +81,42 @@ func createNetwork(ctx context.Context, name string) (*testcontainers.DockerNetw
 	return dockerNetwork, nil
 }
 
-// Start launches all required services
-func (p *TestContainersProvider) Start(ctx context.Context) error {
+// Start initializes and launches all registered services.
+// Returns a stop function that cleans up infrastructure.
+//
+// In TestMain mode: executes m.Run() before returning, stop returns exit code.
+// In per-test mode: returns immediately after services start, stop returns 0.
+func (p *TestContainersProvider) Start(ctx context.Context) func(context.Context) int {
+	// Initialize infrastructure
+	if err := p.Initialize(ctx); err != nil {
+		if p.testMain != nil {
+			log.Printf("Failed to initialize infrastructure: %v", err)
+			p.exitCode = 1
+			return p.stop
+		}
+		panic(fmt.Sprintf("failed to initialize infrastructure: %v", err))
+	}
+
+	// Start services
+	if err := p.startServices(ctx); err != nil {
+		if p.testMain != nil {
+			log.Printf("Failed to start infrastructure: %v", err)
+			p.exitCode = 1
+			return p.stop
+		}
+		panic(fmt.Sprintf("failed to start infrastructure: %v", err))
+	}
+
+	// In TestMain mode, run tests now
+	if p.testMain != nil {
+		p.exitCode = p.testMain.Run()
+	}
+
+	return p.stop
+}
+
+// startServices launches all required services (internal method)
+func (p *TestContainersProvider) startServices(ctx context.Context) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -85,6 +132,14 @@ func (p *TestContainersProvider) Start(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// stop cleans up infrastructure and returns the exit code
+func (p *TestContainersProvider) stop(ctx context.Context) int {
+	if err := p.Stop(ctx); err != nil {
+		log.Printf("Warning: failed to stop infrastructure: %v", err)
+	}
+	return p.exitCode
 }
 
 // startService starts a single service and its dependencies

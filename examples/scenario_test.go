@@ -95,17 +95,10 @@ func TestScenarioWithInfrastructure(t *testing.T) {
 	tc := core.NewTestContext(t)
 	tc.InfraProvider = provider
 
-	// Initialize infrastructure
+	// Start infrastructure (includes initialization)
 	bgCtx := context.Background()
-	if err := provider.Initialize(bgCtx); err != nil {
-		t.Fatalf("Failed to initialize infrastructure: %v", err)
-	}
-	defer provider.Stop(bgCtx)
-
-	// Start infrastructure
-	if err := provider.Start(bgCtx); err != nil {
-		t.Fatalf("Failed to start infrastructure: %v", err)
-	}
+	stop := provider.Start(bgCtx)
+	defer stop(bgCtx)
 
 	// Create a scenario context from the core context
 	scenarioCtx := scenarios.WithCoreContext(tc)

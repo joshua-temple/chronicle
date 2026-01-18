@@ -176,8 +176,12 @@ type InfrastructureProvider interface {
 	// Initialize prepares the infrastructure
 	Initialize(context.Context) error
 
-	// Start launches all required services
-	Start(context.Context) error
+	// Start initializes and launches all registered services.
+	// Returns a stop function that cleans up infrastructure.
+	//
+	// In TestMain mode: executes m.Run() before returning, stop returns exit code.
+	// In per-test mode: returns immediately after services start, stop returns 0.
+	Start(context.Context) func(context.Context) int
 
 	// Stop terminates all services
 	Stop(context.Context) error

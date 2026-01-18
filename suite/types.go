@@ -388,22 +388,10 @@ func (s *Suite) Run(ctx context.Context) error {
 		}
 	}
 
-	// Initialize infrastructure
+	// Initialize and start infrastructure
 	if s.InfraProvider != nil {
-		if err := s.InfraProvider.Initialize(ctx); err != nil {
-			return fmt.Errorf("failed to initialize infrastructure: %w", err)
-		}
-
-		if err := s.InfraProvider.Start(ctx); err != nil {
-			return fmt.Errorf("failed to start infrastructure: %w", err)
-		}
-
-		// Ensure cleanup
-		defer func() {
-			if err := s.InfraProvider.Stop(ctx); err != nil {
-				fmt.Printf("Warning: failed to stop infrastructure: %v\n", err)
-			}
-		}()
+		stop := s.InfraProvider.Start(ctx)
+		defer stop(ctx)
 	}
 
 	// Apply global mocks

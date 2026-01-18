@@ -3,11 +3,13 @@ package infrastructure
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
+	"testing"
 	"time"
 
 	"github.com/joshua-temple/chronicle/core"
@@ -21,6 +23,10 @@ type DockerComposeProvider struct {
 	runningServices  map[string]bool
 	containerIDCache map[string]string
 	mutex            sync.Mutex
+
+	// TestMain lifecycle fields
+	testMain *testing.M // nil for per-test mode
+	exitCode int        // captured from m.Run()
 }
 
 // NewDockerComposeProvider creates a new Docker Compose provider
@@ -32,6 +38,13 @@ func NewDockerComposeProvider(composeFilePath string, projectName string) *Docke
 		runningServices:  make(map[string]bool),
 		containerIDCache: make(map[string]string),
 	}
+}
+
+// WithTestMain configures the provider for TestMain lifecycle management.
+// When set, Start() will execute m.Run() and capture the exit code.
+func (p *DockerComposeProvider) WithTestMain(m *testing.M) *DockerComposeProvider {
+	p.testMain = m
+	return p
 }
 
 // Initialize prepares the infrastructure
@@ -53,8 +66,42 @@ func (p *DockerComposeProvider) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// Start launches all required services
-func (p *DockerComposeProvider) Start(ctx context.Context) error {
+// Start initializes and launches all registered services.
+// Returns a stop function that cleans up infrastructure.
+//
+// In TestMain mode: executes m.Run() before returning, stop returns exit code.
+// In per-test mode: returns immediately after services start, stop returns 0.
+func (p *DockerComposeProvider) Start(ctx context.Context) func(context.Context) int {
+	// Initialize infrastructure
+	if err := p.Initialize(ctx); err != nil {
+		if p.testMain != nil {
+			log.Printf("Failed to initialize infrastructure: %v", err)
+			p.exitCode = 1
+			return p.stop
+		}
+		panic(fmt.Sprintf("failed to initialize infrastructure: %v", err))
+	}
+
+	// Start services
+	if err := p.startServices(ctx); err != nil {
+		if p.testMain != nil {
+			log.Printf("Failed to start infrastructure: %v", err)
+			p.exitCode = 1
+			return p.stop
+		}
+		panic(fmt.Sprintf("failed to start infrastructure: %v", err))
+	}
+
+	// In TestMain mode, run tests now
+	if p.testMain != nil {
+		p.exitCode = p.testMain.Run()
+	}
+
+	return p.stop
+}
+
+// startServices launches all required services (internal method)
+func (p *DockerComposeProvider) startServices(ctx context.Context) error {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -106,6 +153,14 @@ func (p *DockerComposeProvider) Start(ctx context.Context) error {
 	time.Sleep(5 * time.Second)
 
 	return nil
+}
+
+// stop cleans up infrastructure and returns the exit code
+func (p *DockerComposeProvider) stop(ctx context.Context) int {
+	if err := p.Stop(ctx); err != nil {
+		log.Printf("Warning: failed to stop infrastructure: %v", err)
+	}
+	return p.exitCode
 }
 
 // Stop terminates all services
