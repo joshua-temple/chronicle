@@ -134,8 +134,8 @@ func TestScenarioWithInfrastructure(t *testing.T) {
 	}
 }
 
-// ExampleDaemonUsage demonstrates how to set up and run the daemon service
-func ExampleDaemonUsage() {
+// Example_daemonUsage demonstrates how to set up and run the daemon service
+func Example_daemonUsage() {
 	// Create a component registry
 	registry := daemon.NewComponentRegistry()
 

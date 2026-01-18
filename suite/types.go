@@ -6,7 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joshua-temple/chronicle/chronicle"
 	"github.com/joshua-temple/chronicle/core"
+	"github.com/joshua-temple/chronicle/metrics"
+	"github.com/joshua-temple/chronicle/mocks"
 	"github.com/joshua-temple/chronicle/scenarios"
 )
 
@@ -167,6 +170,18 @@ type Suite struct {
 	// Timeout is the maximum duration for the entire suite
 	Timeout time.Duration
 
+	// MockRegistry manages mock clients and stubs
+	MockRegistry *mocks.MockRegistry
+
+	// MetricsCollector receives metrics events
+	MetricsCollector metrics.Collector
+
+	// ChronicleEnabled enables chronicle recording
+	ChronicleEnabled bool
+
+	// suiteChronicle aggregates test chronicles
+	suiteChronicle *chronicle.SuiteChronicle
+
 	// TestRegistry holds all tests by ID
 	testRegistry map[core.TestID]*Test
 
@@ -278,6 +293,29 @@ func (s *Suite) WithTimeout(timeout time.Duration) *Suite {
 	return s
 }
 
+// WithMockRegistry sets the mock registry
+func (s *Suite) WithMockRegistry(registry *mocks.MockRegistry) *Suite {
+	s.MockRegistry = registry
+	return s
+}
+
+// WithMetrics sets the metrics collector
+func (s *Suite) WithMetrics(collector metrics.Collector) *Suite {
+	s.MetricsCollector = collector
+	return s
+}
+
+// WithChronicle enables chronicle recording
+func (s *Suite) WithChronicle() *Suite {
+	s.ChronicleEnabled = true
+	return s
+}
+
+// SuiteChronicle returns the suite chronicle if enabled
+func (s *Suite) SuiteChronicle() *chronicle.SuiteChronicle {
+	return s.suiteChronicle
+}
+
 // AddTest adds a test to the suite
 func (s *Suite) AddTest(test *Test) *Suite {
 	s.mutex.Lock()
@@ -329,6 +367,13 @@ func (s *Suite) GetComponent(id core.ComponentID) (scenarios.Component, bool) {
 
 // Run executes the entire suite
 func (s *Suite) Run(ctx context.Context) error {
+	start := time.Now()
+
+	// Initialize suite chronicle if enabled
+	if s.ChronicleEnabled {
+		s.suiteChronicle = chronicle.NewSuiteChronicle(string(s.ID), s.Description)
+	}
+
 	// Create a context with timeout if specified
 	if s.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -361,6 +406,14 @@ func (s *Suite) Run(ctx context.Context) error {
 		}()
 	}
 
+	// Apply global mocks
+	if s.MockRegistry != nil {
+		if err := s.MockRegistry.ApplyGlobal(ctx); err != nil {
+			return fmt.Errorf("failed to apply global mocks: %w", err)
+		}
+		defer s.MockRegistry.ClearGlobal(ctx)
+	}
+
 	// Run global setup
 	for i, setup := range s.GlobalSetup {
 		scenarioCtx := scenarios.NewContext()
@@ -375,11 +428,20 @@ func (s *Suite) Run(ctx context.Context) error {
 		return err
 	}
 
+	// Track results for metrics
+	var passed, failed, skipped int
+
 	// Execute tests in order
 	for _, test := range executionOrder {
+		if test.Skip {
+			skipped++
+			continue
+		}
 		if err := s.runTest(ctx, test); err != nil {
-			// Continue if test fails, but record the error
+			failed++
 			fmt.Printf("Test %s failed: %v\n", test.ID, err)
+		} else {
+			passed++
 		}
 	}
 
@@ -396,6 +458,22 @@ func (s *Suite) Run(ctx context.Context) error {
 		if err := hook.AfterSuite(ctx, s); err != nil {
 			return fmt.Errorf("after suite hook failed: %w", err)
 		}
+	}
+
+	// Finalize suite chronicle
+	if s.suiteChronicle != nil {
+		s.suiteChronicle.Finalize()
+	}
+
+	// Emit suite metrics
+	if s.MetricsCollector != nil {
+		s.MetricsCollector.Collect(ctx, &metrics.SuiteCompleted{
+			SuiteID:  s.ID,
+			Duration: time.Since(start),
+			Passed:   passed,
+			Failed:   failed,
+			Skipped:  skipped,
+		})
 	}
 
 	return nil
@@ -444,11 +522,17 @@ func (s *Suite) runTest(ctx context.Context, test *Test) error {
 
 	// Execute test with retries
 	var lastErr error
+	var testChronicle *chronicle.Chronicle
 	for attempt := 1; attempt <= retryPolicy.MaxAttempts; attempt++ {
 		result.Attempt = attempt
 
+		// Create chronicle for this test if enabled
+		if s.ChronicleEnabled {
+			testChronicle = chronicle.New(string(test.ID), test.Description)
+		}
+
 		// Try running the test
-		err := s.executeTest(testCtx, test, result)
+		err := s.executeTest(testCtx, test, result, testChronicle)
 		if err == nil {
 			// Test succeeded
 			result.Success = true
@@ -481,6 +565,30 @@ func (s *Suite) runTest(ctx context.Context, test *Test) error {
 	// Finalize result
 	result.Duration = time.Since(result.StartTime)
 
+	// Finalize test chronicle and add to suite
+	if testChronicle != nil {
+		testChronicle.Finalize()
+		if s.suiteChronicle != nil {
+			s.suiteChronicle.Add(testChronicle.Root())
+		}
+	}
+
+	// Emit test metrics
+	if s.MetricsCollector != nil {
+		status := metrics.StatusPassed
+		if lastErr != nil {
+			status = metrics.StatusFailed
+		}
+		s.MetricsCollector.Collect(ctx, &metrics.TestCompleted{
+			SuiteID:  s.ID,
+			TestID:   test.ID,
+			Duration: result.Duration,
+			Status:   status,
+			Retries:  result.Attempt - 1,
+			Error:    errString(lastErr),
+		})
+	}
+
 	// Run after test hooks
 	for _, hook := range s.Hooks {
 		if err := hook.AfterTest(ctx, s, test, result); err != nil {
@@ -491,10 +599,25 @@ func (s *Suite) runTest(ctx context.Context, test *Test) error {
 	return lastErr
 }
 
+func errString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
 // executeTest runs a single test execution attempt
-func (s *Suite) executeTest(ctx context.Context, test *Test, result *TestResult) error {
+func (s *Suite) executeTest(ctx context.Context, test *Test, result *TestResult, testChronicle *chronicle.Chronicle) error {
 	// Create scenario context
 	scenarioCtx := scenarios.NewContext()
+
+	// Set up chronicle and metrics on the context
+	if testChronicle != nil {
+		scenarioCtx.SetChronicle(testChronicle)
+	}
+	if s.MetricsCollector != nil {
+		scenarioCtx.SetMetrics(metrics.NewEmitter(s.MetricsCollector))
+	}
 
 	// Set up access to suite state based on test's access level
 	switch test.StateAccess {
@@ -534,7 +657,12 @@ func (s *Suite) executeTest(ctx context.Context, test *Test, result *TestResult)
 			return fmt.Errorf("component %s not found", componentID)
 		}
 
-		if err := component(scenarioCtx); err != nil {
+		// Record component in chronicle
+		done := scenarioCtx.Chronicle().Component(string(componentID), "")
+		err := component(scenarioCtx)
+		done(err)
+
+		if err != nil {
 			return fmt.Errorf("component %s failed: %w", componentID, err)
 		}
 	}

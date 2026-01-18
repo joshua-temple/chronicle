@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/joshua-temple/chronicle/chronicle"
 	"github.com/joshua-temple/chronicle/core"
+	"github.com/joshua-temple/chronicle/metrics"
 )
 
 // Component represents a reusable test component that can be composed into scenarios.
@@ -25,6 +27,8 @@ type Context struct {
 	parameters map[string]interface{}
 	logger     Logger
 	parent     *core.TestContext // Optional, may be nil in daemon mode
+	chron      *chronicle.Chronicle
+	metricsEm  *metrics.Emitter
 	mutex      sync.RWMutex
 }
 
@@ -186,6 +190,32 @@ func (c *Context) Store() *core.DataStore {
 	return c.store
 }
 
+// Chronicle returns the chronicle recorder, or a no-op if not configured
+func (c *Context) Chronicle() *chronicle.Chronicle {
+	if c.chron == nil {
+		return chronicle.Noop()
+	}
+	return c.chron
+}
+
+// Metrics returns the metrics emitter, or a no-op if not configured
+func (c *Context) Metrics() *metrics.Emitter {
+	if c.metricsEm == nil {
+		return metrics.NoopEmitter()
+	}
+	return c.metricsEm
+}
+
+// SetChronicle sets the chronicle recorder
+func (c *Context) SetChronicle(chron *chronicle.Chronicle) {
+	c.chron = chron
+}
+
+// SetMetrics sets the metrics emitter
+func (c *Context) SetMetrics(em *metrics.Emitter) {
+	c.metricsEm = em
+}
+
 // Parameter defines a parameter with optional generator for a scenario
 type Parameter struct {
 	Name        string
@@ -268,6 +298,21 @@ type Scenario struct {
 
 // Execute runs the scenario with the given context
 func (s *Scenario) Execute(ctx *Context) error {
+	start := time.Now()
+
+	// Emit metrics for scenario start
+	ctx.Metrics().ScenarioStart(ctx.ctx, s.Name, s.Name)
+
+	var execErr error
+	defer func() {
+		status := metrics.StatusPassed
+		if execErr != nil {
+			status = metrics.StatusFailed
+		}
+		ctx.Metrics().ScenarioEnd(ctx.ctx, s.Name, s.Name, time.Since(start), status, execErr)
+		ctx.Chronicle().Finalize()
+	}()
+
 	// Set timeout
 	if s.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -287,9 +332,14 @@ func (s *Scenario) Execute(ctx *Context) error {
 	// Execute setup
 	ctx.logger.Info("Starting scenario: %s", s.Name)
 	for i, setup := range s.Setup {
+		setupName := fmt.Sprintf("Setup %d", i+1)
+		done := ctx.Chronicle().Setup(setupName, "")
 		ctx.logger.Debug("Running setup step %d", i+1)
-		if err := setup(ctx); err != nil {
-			return fmt.Errorf("setup failed: %w", err)
+		err := setup(ctx)
+		done(err)
+		if err != nil {
+			execErr = fmt.Errorf("setup failed: %w", err)
+			return execErr
 		}
 	}
 
@@ -298,19 +348,37 @@ func (s *Scenario) Execute(ctx *Context) error {
 		// Check if component should be executed
 		if component.Condition != nil && !component.Condition(ctx) {
 			ctx.logger.Debug("Skipping component %s (condition not met)", component.Name)
+			ctx.Chronicle().Skip(component.Name, "condition not met")
 			continue
 		}
 
+		compStart := time.Now()
+		done := ctx.Chronicle().Component(component.Name, "")
 		ctx.logger.Debug("Running component: %s", component.Name)
-		if err := component.Component(ctx); err != nil {
-			return fmt.Errorf("component %s failed: %w", component.Name, err)
+		err := component.Component(ctx)
+		done(err)
+
+		// Emit component metrics
+		compStatus := metrics.StatusPassed
+		if err != nil {
+			compStatus = metrics.StatusFailed
+		}
+		ctx.Metrics().ComponentEnd(ctx.ctx, s.Name, component.Name, time.Since(compStart), compStatus, err)
+
+		if err != nil {
+			execErr = fmt.Errorf("component %s failed: %w", component.Name, err)
+			return execErr
 		}
 	}
 
 	// Execute teardown (always attempt teardown, even if components failed)
 	for i, teardown := range s.Teardown {
+		teardownName := fmt.Sprintf("Teardown %d", i+1)
+		done := ctx.Chronicle().Teardown(teardownName, "")
 		ctx.logger.Debug("Running teardown step %d", i+1)
-		if err := teardown(ctx); err != nil {
+		err := teardown(ctx)
+		done(err)
+		if err != nil {
 			ctx.logger.Warning("Teardown step %d failed: %v", i+1, err)
 		}
 	}

@@ -2,11 +2,16 @@ package scenarios
 
 import (
 	"time"
+
+	"github.com/joshua-temple/chronicle/chronicle"
+	"github.com/joshua-temple/chronicle/metrics"
 )
 
 // ScenarioBuilder provides a fluent interface for building scenarios
 type ScenarioBuilder struct {
-	scenario *Scenario
+	scenario          *Scenario
+	chronicleEnabled  bool
+	metricsCollector  metrics.Collector
 }
 
 // NewBuilder creates a new scenario builder with the given name
@@ -126,9 +131,45 @@ func (b *ScenarioBuilder) WithEnumParameter(
 	})
 }
 
+// WithChronicle enables chronicle recording for the scenario
+func (b *ScenarioBuilder) WithChronicle() *ScenarioBuilder {
+	b.chronicleEnabled = true
+	return b
+}
+
+// WithMetrics sets a metrics collector for the scenario
+func (b *ScenarioBuilder) WithMetrics(collector metrics.Collector) *ScenarioBuilder {
+	b.metricsCollector = collector
+	return b
+}
+
 // Build creates the scenario
 func (b *ScenarioBuilder) Build() *Scenario {
 	return b.scenario
+}
+
+// Execute builds and runs the scenario, returning the chronicle root if enabled
+func (b *ScenarioBuilder) Execute() (*chronicle.Entry, error) {
+	ctx := NewContext()
+
+	// Set up chronicle if enabled
+	if b.chronicleEnabled {
+		chron := chronicle.New(b.scenario.Name, b.scenario.Description)
+		ctx.SetChronicle(chron)
+	}
+
+	// Set up metrics if collector provided
+	if b.metricsCollector != nil {
+		ctx.SetMetrics(metrics.NewEmitter(b.metricsCollector))
+	}
+
+	err := b.scenario.Execute(ctx)
+
+	// Return chronicle root if enabled
+	if b.chronicleEnabled {
+		return ctx.Chronicle().Root(), err
+	}
+	return nil, err
 }
 
 // New creates a scenario with the given name and returns the builder
@@ -139,5 +180,21 @@ func New(name string) *ScenarioBuilder {
 // Run executes a scenario with a new context
 func Run(scenario *Scenario) error {
 	ctx := NewContext()
+	return scenario.Execute(ctx)
+}
+
+// RunWithChronicle executes a scenario with chronicle recording enabled
+func RunWithChronicle(scenario *Scenario) (*chronicle.Entry, error) {
+	ctx := NewContext()
+	chron := chronicle.New(scenario.Name, scenario.Description)
+	ctx.SetChronicle(chron)
+	err := scenario.Execute(ctx)
+	return chron.Root(), err
+}
+
+// RunWithMetrics executes a scenario with metrics collection
+func RunWithMetrics(scenario *Scenario, collector metrics.Collector) error {
+	ctx := NewContext()
+	ctx.SetMetrics(metrics.NewEmitter(collector))
 	return scenario.Execute(ctx)
 }
