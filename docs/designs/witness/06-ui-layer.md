@@ -21,6 +21,7 @@
   - [Results Dashboard](#results-dashboard)
 - [Terminal UI (TUI)](#terminal-ui-tui)
 - [IDE Plugins](#ide-plugins)
+- [Dependency Graph](#dependency-graph)
 - [YAML as Source of Truth](#yaml-as-source-of-truth)
 
 ---
@@ -300,6 +301,80 @@ func CreateOrder(ctx witness.Context) (*Order, error) {
     // Hover shows: Last run: passed (2.3s) - 3 hours ago
     // ...
 }
+```
+
+---
+
+## Dependency Graph
+
+### CLI Visualization
+
+```bash
+# ASCII graph of scenario dependencies
+witness graph --scenario checkout-flow
+
+# Output:
+# checkout-flow
+# ├── CreateUser [setup]
+# │   └── produces: user:User
+# ├── SeedCart [setup]
+# │   ├── requires: user:User ←──┘
+# │   └── produces: cart:Cart
+# ├── Checkout [task]
+# │   ├── requires: user:User ←──────┐
+# │   ├── requires: cart:Cart ←──────┤
+# │   └── produces: order:Order      │
+# └── OrderCreated [validation]      │
+#     └── requires: order:Order ←────┘
+
+# Export as DOT format for Graphviz
+witness graph --scenario checkout-flow --format dot > graph.dot
+dot -Tpng graph.dot -o graph.png
+
+# Export as Mermaid
+witness graph --scenario checkout-flow --format mermaid
+```
+
+### Cycle Detection
+
+```bash
+witness validate --check-cycles
+
+# Output:
+# ❌ Cycle detected in component dependencies:
+#    CreateOrder → ValidateStock → ReserveInventory → CreateOrder
+#
+#    Suggestion: Extract shared dependency or use explicit ordering
+```
+
+### Validation Rules
+
+At discovery time:
+
+```yaml
+validation:
+  dependencies:
+    # Fail if any component has unresolved requires
+    require_all_dependencies: true
+
+    # Fail if cycles detected
+    disallow_cycles: true
+
+    # Warn if produces overlap (same key from multiple components)
+    warn_on_shadowing: true
+```
+
+### Graph Query
+
+```bash
+# What depends on user:User?
+witness graph --depends-on "user:User"
+
+# What does CreateOrder need?
+witness graph --component CreateOrder --show requires
+
+# Find shortest path between components
+witness graph --from CreateUser --to ValidateOrder
 ```
 
 ---

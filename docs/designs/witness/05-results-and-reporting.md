@@ -15,6 +15,7 @@
 ## Table of Contents
 
 - [Results Model](#results-model)
+- [Error Classification](#error-classification)
 - [Execution Narrative](#execution-narrative)
 - [Storage Adapters](#storage-adapters)
 - [Report Formats](#report-formats)
@@ -74,6 +75,101 @@ type ErrorDetail struct {
     Actual     any
 }
 ```
+
+---
+
+## Error Classification
+
+### Error Categories
+
+```go
+type ErrorCategory string
+
+const (
+    // Test authored failures
+    CategoryAssertion      ErrorCategory = "assertion"       // Validation failed
+    CategoryPrecondition   ErrorCategory = "precondition"    // Setup failed
+
+    // Infrastructure failures
+    CategoryInfrastructure ErrorCategory = "infrastructure"  // Container/service down
+    CategoryNetwork        ErrorCategory = "network"         // Connection issues
+    CategoryTimeout        ErrorCategory = "timeout"         // Deadline exceeded
+
+    // Framework failures
+    CategoryFramework      ErrorCategory = "framework"       // Bug in Witness
+    CategoryConfiguration  ErrorCategory = "configuration"   // Invalid YAML/config
+    CategoryDependency     ErrorCategory = "dependency"      // Missing component
+
+    // External failures
+    CategoryExternal       ErrorCategory = "external"        // Third-party service
+    CategoryUnknown        ErrorCategory = "unknown"         // Uncategorized
+)
+```
+
+### Extended Error Detail Structure
+
+```go
+type ErrorDetail struct {
+    Category    ErrorCategory
+    Message     string
+    Stack       string
+    Component   string
+
+    // For assertions
+    Expected    any
+    Actual      any
+    Diff        string
+
+    // For infrastructure
+    Service     string
+    Endpoint    string
+    StatusCode  int
+
+    // Remediation
+    Suggestion  string
+    DocsLink    string
+    Retryable   bool
+}
+```
+
+### Classification in Results
+
+```yaml
+# Result output
+status: failed
+error:
+  category: infrastructure
+  message: "connection refused"
+  service: postgres
+  endpoint: localhost:5432
+  retryable: true
+  suggestion: "Check if PostgreSQL container is running"
+```
+
+### Filtering by Category
+
+```bash
+# Show only assertion failures (real test failures)
+witness results --category assertion
+
+# Show infrastructure issues (flaky, should retry)
+witness results --category infrastructure,network,timeout
+
+# Exclude framework bugs from flaky detection
+witness flaky detect --exclude-category framework
+```
+
+### Automatic Classification
+
+Framework auto-classifies common errors:
+
+| Error Pattern | Category |
+|--------------|----------|
+| `connection refused` | infrastructure |
+| `context deadline exceeded` | timeout |
+| `expected X, got Y` | assertion |
+| `component "X" not found` | dependency |
+| `panic:` | framework |
 
 ---
 

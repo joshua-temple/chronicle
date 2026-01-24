@@ -35,6 +35,10 @@
   - [Dependency Declaration](#dependency-declaration)
   - [Discovery Process](#discovery-process)
 - [Context & State](#context--state)
+- [Concurrency Model](#concurrency-model)
+- [Component Versioning](#component-versioning)
+- [Cleanup & Teardown](#cleanup--teardown)
+- [Component Documentation](#component-documentation)
 
 ---
 
@@ -668,6 +672,252 @@ type Context interface {
 - Components declare **dependencies** (what infra clients they need)
 - Components can be **conditional** (run only if predicate passes)
 - Components emit **events** for observability
+
+---
+
+## Concurrency Model
+
+### Context Thread Safety
+
+The `Context` is **not thread-safe**. Each goroutine must have its own Context instance.
+
+```go
+// WRONG - shared context across goroutines
+go func() { witness.Set(ctx, "key", value1) }()
+go func() { witness.Set(ctx, "key", value2) }()
+
+// CORRECT - derive child contexts
+go func() {
+    childCtx := ctx.Child("worker-1")
+    witness.Set(childCtx, "key", value1)
+}()
+```
+
+### Parallel Step Execution
+
+Steps within a scenario execute **sequentially by default**. Parallel execution requires explicit declaration:
+
+```yaml
+flow:
+  - setup: CreateUser
+  - parallel:
+      - setup: SeedInventory
+      - setup: SeedPaymentMethods
+  - task: Checkout  # Waits for parallel block to complete
+```
+
+Parallel blocks:
+- Each step gets an isolated child context
+- Results merge into parent context after all complete
+- If any step fails, remaining parallel steps are cancelled
+- Name collisions in `produces` within parallel block are errors
+
+### Scenario Isolation
+
+Concurrent scenarios are **fully isolated**:
+- Separate Context instances
+- Separate infrastructure instances (when using `isolation: instance`)
+- No shared mutable state
+
+When using `isolation: data` or `isolation: none`, users must ensure their components handle concurrent access to shared infrastructure.
+
+---
+
+## Component Versioning
+
+### Annotation Version
+
+Components declare their contract version:
+
+```go
+// @witness:task name="CreateOrder" version="2" requires="user:User" produces="order:Order"
+func CreateOrder(ctx witness.Context) (*Order, error) { ... }
+```
+
+### Version Compatibility
+
+Scenarios reference minimum component versions:
+
+```yaml
+scenarios:
+  - name: checkout-flow
+    component_versions:
+      CreateOrder: ">=2"
+      ProcessPayment: ">=1,<3"
+    flow:
+      - task: CreateOrder
+      - task: ProcessPayment
+```
+
+### Breaking Change Detection
+
+At discovery time, framework detects:
+- Signature changes (parameter types, return types)
+- Produces/requires changes
+- Removed components
+
+```bash
+witness discover --check-compatibility
+
+# Output:
+# ⚠️  CreateOrder v2: added 'cart:Cart' to requires (was: user:User only)
+# ❌  ProcessPayment: removed (scenarios checkout-flow, payment-test affected)
+```
+
+### Deprecation
+
+```go
+// @witness:task name="OldCheckout" deprecated="Use CreateOrder instead" sunset="2025-06-01"
+func OldCheckout(ctx witness.Context) error { ... }
+```
+
+```bash
+witness run --fail-on-deprecated  # Fail if deprecated components used
+witness run --warn-on-deprecated  # Warn only (default)
+```
+
+---
+
+## Cleanup & Teardown
+
+### Component Types (Extended)
+
+| Type | Purpose | Cleanup |
+|------|---------|---------|
+| Setup | Prepare state | Implicit via Teardown |
+| Task | Execute action | None |
+| Validation | Assert outcomes | None |
+| **Teardown** | Cleanup state | Runs even on failure |
+
+### Teardown Component
+
+```go
+// @witness:teardown name="DeleteUser" requires="user:User"
+func DeleteUser(ctx witness.Context) error {
+    user := witness.Get[*User](ctx, "user")
+    return userService.Delete(ctx, user.ID)
+}
+```
+
+### Automatic Teardown Pairing
+
+Setup components can declare their teardown:
+
+```go
+// @witness:setup name="CreateUser" produces="user:User" teardown="DeleteUser"
+func CreateUser(ctx witness.Context) error { ... }
+```
+
+### Scenario Teardown Configuration
+
+```yaml
+scenarios:
+  - name: checkout-flow
+    flow:
+      - setup: CreateUser
+      - task: Checkout
+      - validation: OrderCreated
+
+    teardown:
+      mode: always  # always | on_failure | on_success | never
+      order: reverse  # reverse | declared | parallel
+      continue_on_error: true  # Don't stop teardown chain on error
+
+    # Explicit teardown steps (optional, overrides auto-pairing)
+    teardown_flow:
+      - teardown: DeleteOrder
+      - teardown: DeleteUser
+```
+
+### Failure Behavior
+
+```
+Execution Flow:
+  Setup A ✓
+  Setup B ✓
+  Task C  ✗ (fails)
+  ─────────────────
+  Teardown B runs (paired with Setup B)
+  Teardown A runs (paired with Setup A)
+```
+
+### Teardown Context
+
+Teardown components receive a `TeardownContext` with:
+- All values from original context
+- `ctx.FailureReason()` - why the test failed (if applicable)
+- `ctx.PartialResults()` - results up to failure point
+
+---
+
+## Component Documentation
+
+### Description Annotation
+
+```go
+// @witness:task name="ProcessPayment"
+// @witness:description "Processes payment through the configured payment gateway"
+// @witness:description "Supports credit cards, PayPal, and Apple Pay"
+// @witness:requires user:User "The authenticated user making the purchase"
+// @witness:requires cart:Cart "Shopping cart with items to purchase"
+// @witness:produces payment:PaymentResult "The payment transaction result"
+// @witness:example "ProcessPayment handles declined cards gracefully"
+// @witness:tags payment,critical,integration
+// @witness:owner payments-team
+// @witness:since 1.2.0
+func ProcessPayment(ctx witness.Context) (*PaymentResult, error) { ... }
+```
+
+### Documentation Generation
+
+```bash
+# Generate component catalog
+witness docs generate --format html --output ./docs/components/
+
+# Generate scenario documentation
+witness docs scenarios --format markdown --output ./docs/scenarios/
+
+# Generate API documentation
+witness docs api --format openapi --output ./api/openapi.yaml
+```
+
+### Catalog Output
+
+```markdown
+# ProcessPayment
+
+**Type:** Task
+**Owner:** payments-team
+**Since:** v1.2.0
+**Tags:** payment, critical, integration
+
+## Description
+
+Processes payment through the configured payment gateway.
+Supports credit cards, PayPal, and Apple Pay.
+
+## Dependencies
+
+| Direction | Type | Name | Description |
+|-----------|------|------|-------------|
+| Requires | User | user | The authenticated user making the purchase |
+| Requires | Cart | cart | Shopping cart with items to purchase |
+| Produces | PaymentResult | payment | The payment transaction result |
+
+## Used In Scenarios
+
+- checkout-flow
+- payment-retry-test
+- multi-currency-checkout
+```
+
+### UI Integration
+
+The catalog populates:
+- Component browser with descriptions
+- Drag-and-drop tooltips
+- Autocomplete suggestions
+- Search results
 
 ---
 

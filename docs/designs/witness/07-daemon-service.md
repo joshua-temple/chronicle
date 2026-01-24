@@ -15,9 +15,12 @@
 ## Table of Contents
 
 - [Service Architecture](#service-architecture)
+- [Event Bus](#event-bus)
 - [API Reference](#api-reference)
+- [Authentication & Authorization](#authentication--authorization)
 - [Deployment Modes](#deployment-modes)
 - [CI/CD Integration](#cicd-integration)
+- [Configuration Hot Reload](#configuration-hot-reload)
 - [Observability](#observability)
 
 ---
@@ -64,6 +67,60 @@ When deployed, Witness runs as a long-lived service with full orchestration capa
 | **Config Store** | Manages YAML configs (file or remote) |
 | **Results Store** | Persists test results via adapters |
 | **Notifier** | Sends alerts on configured conditions |
+
+---
+
+## Event Bus
+
+### Architecture
+
+```yaml
+service:
+  event_bus:
+    type: embedded  # embedded | redis | nats | kafka
+
+    # For embedded (single instance)
+    embedded:
+      buffer_size: 10000
+
+    # For redis (distributed)
+    redis:
+      url: redis://redis:6379
+      channel_prefix: witness:events:
+
+    # Durability
+    durability:
+      persist: false          # In-memory only for speed
+      replay_on_startup: true # Replay recent events on worker reconnect
+      retention: 1h           # How long to keep events for replay
+```
+
+### Failure Handling
+
+```yaml
+service:
+  event_bus:
+    on_failure: buffer   # buffer | drop | fail
+    buffer_size: 1000    # Events to buffer during outage
+    reconnect:
+      max_attempts: 10
+      backoff: exponential
+      max_delay: 30s
+```
+
+### Event Delivery Guarantees
+
+| Mode | Guarantee | Use Case |
+|------|-----------|----------|
+| `at_most_once` | May lose events | High throughput, loss acceptable |
+| `at_least_once` | May duplicate events | Default, handlers must be idempotent |
+| `exactly_once` | No loss or duplication | Requires transactional storage |
+
+```yaml
+service:
+  event_bus:
+    delivery: at_least_once
+```
 
 ---
 
@@ -155,6 +212,95 @@ GET    /api/v1/config/validate   # Validate configuration
 GET    /api/v1/health            # Service health
 GET    /api/v1/metrics           # Prometheus metrics
 GET    /api/v1/status            # Detailed status
+```
+
+---
+
+## Authentication & Authorization
+
+### Token Management
+
+```yaml
+service:
+  auth:
+    enabled: true
+    method: jwt  # jwt | api_key | oauth2
+
+    jwt:
+      issuer: witness
+      audience: witness-api
+      secret: ${JWT_SECRET}      # For HS256
+      # Or public_key for RS256
+      expiry: 24h
+      refresh: true
+      refresh_expiry: 7d
+```
+
+### API Key Generation
+
+```bash
+# Generate API key
+witness api-key create --name "ci-pipeline" --scopes "run:*,results:read"
+
+# Output:
+# API Key: wk_abc123...
+# Scopes: run:*, results:read
+# Expires: never
+#
+# Store this key securely - it cannot be retrieved again.
+
+# List keys
+witness api-key list
+
+# Revoke key
+witness api-key revoke wk_abc123
+```
+
+### Role-Based Access
+
+```yaml
+service:
+  auth:
+    roles:
+      admin:
+        - "*"
+      operator:
+        - "run:*"
+        - "results:*"
+        - "config:read"
+      viewer:
+        - "results:read"
+        - "scenarios:read"
+      ci:
+        - "run:create"
+        - "run:read"
+        - "results:read"
+```
+
+### Rate Limiting
+
+```yaml
+service:
+  rate_limit:
+    enabled: true
+
+    # Global limits
+    global:
+      requests_per_second: 100
+      burst: 200
+
+    # Per-endpoint limits
+    endpoints:
+      "/api/v1/runs":
+        requests_per_minute: 60
+      "/api/v1/results":
+        requests_per_minute: 300
+
+    # Per-client limits
+    per_client:
+      requests_per_minute: 120
+
+    on_exceed: reject  # reject | queue | throttle
 ```
 
 ---
@@ -314,6 +460,77 @@ witness result --run-id <id> --exit-code
 
 # One-liner for CI
 witness run --tags smoke --env staging --wait --timeout 10m
+```
+
+---
+
+## Configuration Hot Reload
+
+### File Watching
+
+```yaml
+service:
+  config:
+    watch: true
+    watch_paths:
+      - ./scenarios/
+      - ./configs/
+    debounce: 2s              # Wait for writes to settle
+    on_change: reload         # reload | ignore | restart
+```
+
+### Reload Behavior
+
+| Change Type | Behavior |
+|-------------|----------|
+| New scenario | Available immediately |
+| Modified scenario | Active runs continue with old, new runs use new |
+| Deleted scenario | Cannot start new runs, active runs complete |
+| Infrastructure config | Requires provider restart |
+| Secret rotation | Depends on `secrets.on_rotation` setting |
+
+### Conflict Resolution
+
+When file changes while UI has unsaved edits:
+
+```yaml
+service:
+  config:
+    conflict_resolution: prompt  # prompt | file_wins | ui_wins | merge
+```
+
+With `prompt`, the UI shows:
+```
+⚠️ checkout.yaml changed externally
+[Use File Version] [Keep My Changes] [Show Diff]
+```
+
+### Reload API
+
+```bash
+# Force reload
+curl -X POST http://witness:8080/api/v1/config/reload
+
+# Reload specific file
+curl -X POST http://witness:8080/api/v1/config/reload \
+  -d '{"path": "scenarios/checkout.yaml"}'
+
+# Check reload status
+curl http://witness:8080/api/v1/config/status
+# {"last_reload": "2024-01-15T10:30:00Z", "pending_changes": false}
+```
+
+### CLI
+
+```bash
+# Watch and auto-reload
+witness serve --watch
+
+# Manual reload
+witness config reload
+
+# Validate before reload
+witness config validate && witness config reload
 ```
 
 ---

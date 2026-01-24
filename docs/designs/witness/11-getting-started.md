@@ -14,11 +14,45 @@
 
 ## Table of Contents
 
+- [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Project Structure](#project-structure)
 - [Quickstart](#quickstart)
 - [CLI Reference](#cli-reference)
 - [Configuration Reference](#configuration-reference)
+- [Troubleshooting](#troubleshooting)
+- [Migrating From Other Frameworks](#migrating-from-other-frameworks)
+
+---
+
+## Prerequisites
+
+### Required
+
+- **Go 1.21+** (required for generics support)
+- **Docker** (for TestContainers support)
+- **Git** (for version control integration)
+
+### Verifying Prerequisites
+
+```bash
+# Check Go version
+go version
+# Should output: go version go1.21.x or higher
+
+# Check Docker
+docker --version
+docker info  # Ensure daemon is running
+
+# Check Git
+git --version
+```
+
+### Optional
+
+- **kubectl** - for Kubernetes deployment
+- **Helm** - for chart-based deployment
+- **make** - for build automation
 
 ---
 
@@ -515,6 +549,217 @@ chaos_profiles:
         target: payment-service
         duration: 10s
 ```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### "connection refused" to infrastructure
+
+```
+Error: postgres provider: connection refused
+```
+
+**Cause:** Docker container not ready or not running.
+
+**Solutions:**
+1. Check Docker is running: `docker info`
+2. Check container status: `docker ps -a`
+3. Increase wait timeout in config:
+   ```yaml
+   infrastructure:
+     postgres:
+       wait_timeout: 60s
+   ```
+
+#### "component X not found"
+
+```
+Error: component "CreateUser" not found
+```
+
+**Cause:** Component not discovered.
+
+**Solutions:**
+1. Verify annotation syntax: `// @witness:setup name="CreateUser"`
+2. Check discovery paths in config
+3. Run `witness discover` to see what's found
+
+#### "dependency cycle detected"
+
+```
+Error: dependency cycle: A → B → C → A
+```
+
+**Cause:** Components have circular requires/produces.
+
+**Solution:** Refactor to break the cycle. Consider:
+- Extracting shared state to a common setup
+- Using explicit ordering instead of dependency inference
+
+#### Context timeout
+
+```
+Error: context deadline exceeded
+```
+
+**Cause:** Operation took longer than configured timeout.
+
+**Solutions:**
+1. Increase timeout for slow operations
+2. Check infrastructure health
+3. Review component for performance issues
+
+#### "type mismatch in context"
+
+```
+Error: type mismatch: expected *User, got *models.User
+```
+
+**Cause:** Type alias or import path mismatch.
+
+**Solutions:**
+1. Ensure consistent type imports across components
+2. Use type aliases: `// @witness:type alias="User"`
+3. Check produces/requires declarations match actual types
+
+### Debug Mode
+
+```bash
+# Run with verbose logging
+witness run --scenario checkout-flow --debug
+
+# Show discovery details
+witness discover --verbose
+
+# Validate configuration
+witness config validate --verbose
+```
+
+---
+
+## Migrating From Other Frameworks
+
+### From testify/suite
+
+```go
+// Before (testify)
+type MyTestSuite struct {
+    suite.Suite
+    db *sql.DB
+}
+
+func (s *MyTestSuite) SetupTest() {
+    s.db = setupDatabase()
+}
+
+func (s *MyTestSuite) TestCreateUser() {
+    user := createUser(s.db)
+    s.NotNil(user.ID)
+}
+
+// After (Witness)
+// @witness:setup name="SetupDatabase" produces="db:*sql.DB"
+func SetupDatabase(ctx witness.Context) error {
+    db := ctx.Client("postgres").(*sql.DB)
+    witness.Set(ctx, "db", db)
+    return nil
+}
+
+// @witness:task name="CreateUser" requires="db:*sql.DB" produces="user:User"
+func CreateUser(ctx witness.Context) (*User, error) {
+    db := witness.Get[*sql.DB](ctx, "db")
+    return createUser(db)
+}
+
+// @witness:validation name="UserHasID" requires="user:User"
+func UserHasID(ctx witness.Context, result any) error {
+    user := result.(*User)
+    if user.ID == "" {
+        return errors.New("user ID should not be empty")
+    }
+    return nil
+}
+```
+
+### From Ginkgo/Gomega
+
+```go
+// Before (Ginkgo)
+var _ = Describe("Checkout", func() {
+    var user *User
+
+    BeforeEach(func() {
+        user = createTestUser()
+    })
+
+    It("should create an order", func() {
+        order := checkout(user)
+        Expect(order.ID).NotTo(BeEmpty())
+    })
+})
+
+// After (Witness) - scenarios/checkout.yaml
+scenarios:
+  - name: checkout-creates-order
+    flow:
+      - setup: CreateTestUser
+      - task: Checkout
+      - validation: OrderHasID
+```
+
+### From go test (table-driven)
+
+```go
+// Before (go test)
+func TestCheckout(t *testing.T) {
+    tests := []struct {
+        name     string
+        currency string
+        expected float64
+    }{
+        {"USD checkout", "USD", 99.99},
+        {"EUR checkout", "EUR", 89.99},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            result := checkout(tt.currency)
+            if result.Total != tt.expected {
+                t.Errorf("got %v, want %v", result.Total, tt.expected)
+            }
+        })
+    }
+}
+
+// After (Witness) - scenarios/checkout.yaml
+scenarios:
+  - name: checkout-currencies
+    matrix:
+      currency: [USD, EUR]
+      expected: [99.99, 89.99]
+    flow:
+      - task: Checkout
+        params:
+          currency: ${{ matrix.currency }}
+      - validation: CheckTotal
+        params:
+          expected: ${{ matrix.expected }}
+```
+
+### Migration Checklist
+
+- [ ] Identify all test suites and their dependencies
+- [ ] Map `SetupTest`/`BeforeEach` to Setup components
+- [ ] Map test functions to Task components
+- [ ] Map assertions to Validation components
+- [ ] Extract infrastructure setup to provider config
+- [ ] Convert table-driven tests to matrix scenarios
+- [ ] Run `witness discover` to verify components found
+- [ ] Create scenarios combining components
+- [ ] Run tests and compare results with original framework
 
 ---
 

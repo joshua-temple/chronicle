@@ -18,6 +18,9 @@
 - [CLI Usage](#cli-usage)
 - [Scheduling](#scheduling)
 - [Distributed Execution](#distributed-execution)
+- [Worker Protocol](#worker-protocol)
+- [Timeout Hierarchy](#timeout-hierarchy)
+- [DAG-Based Execution](#dag-based-execution)
 - [Retry Policies](#retry-policies)
 
 ---
@@ -264,6 +267,212 @@ schedules:
         min: 10
         max: 50
       timeout_per_scenario: 5m
+```
+
+---
+
+## Worker Protocol
+
+### Registration
+
+```
+Worker → Coordinator:
+  {
+    "type": "register",
+    "worker_id": "worker-1",
+    "capabilities": ["go", "python"],
+    "labels": ["gpu", "large-memory"],
+    "max_concurrent": 4
+  }
+
+Coordinator → Worker:
+  {
+    "type": "registered",
+    "heartbeat_interval": "10s"
+  }
+```
+
+### Heartbeat
+
+```
+Worker → Coordinator (every 10s):
+  {
+    "type": "heartbeat",
+    "worker_id": "worker-1",
+    "status": "healthy",
+    "running_tasks": 2,
+    "available_slots": 2,
+    "metrics": {
+      "cpu_percent": 45,
+      "memory_mb": 512
+    }
+  }
+```
+
+### Task Assignment
+
+```
+Coordinator → Worker:
+  {
+    "type": "task",
+    "task_id": "task-123",
+    "scenario": "checkout-flow",
+    "config": { ... }
+  }
+
+Worker → Coordinator:
+  {
+    "type": "task_started",
+    "task_id": "task-123"
+  }
+
+Worker → Coordinator:
+  {
+    "type": "task_completed",
+    "task_id": "task-123",
+    "result": { ... }
+  }
+```
+
+### Failure Detection
+
+```yaml
+execution:
+  workers:
+    heartbeat_interval: 10s
+    heartbeat_timeout: 30s      # Mark unhealthy after 3 missed
+    task_timeout_buffer: 60s    # Extra time before considering task stuck
+
+    on_worker_failure:
+      orphaned_tasks: reassign  # reassign | fail | wait
+      max_reassign_attempts: 2
+```
+
+---
+
+## Timeout Hierarchy
+
+Timeouts cascade from suite → scenario → component:
+
+```yaml
+execution:
+  timeout: 30m  # Suite-level default
+
+scenarios:
+  - name: checkout-flow
+    timeout: 5m  # Scenario-level override
+
+    flow:
+      - setup: CreateUser
+        timeout: 10s  # Component-level override
+      - task: SlowOperation
+        timeout: 2m
+      - validation: OrderCreated  # Inherits scenario timeout
+```
+
+### Timeout Behavior
+
+| Level | Default | Behavior on Exceed |
+|-------|---------|-------------------|
+| Suite | 30m | Cancel all running scenarios |
+| Scenario | 5m | Cancel scenario, run teardown |
+| Component | 30s | Cancel component, fail scenario |
+| Infrastructure | 60s | Cancel operation, mark unhealthy |
+
+### Context Deadline Propagation
+
+All context operations respect deadlines:
+
+```go
+func CreateUser(ctx witness.Context) error {
+    // ctx.Deadline() returns scenario deadline minus elapsed time
+
+    // Infrastructure clients inherit deadline
+    db := ctx.Client("postgres").(*sql.DB)
+    // db operations timeout with context
+
+    // Manual check
+    if ctx.Err() == context.DeadlineExceeded {
+        return ctx.Err()
+    }
+}
+```
+
+### Timeout Extensions
+
+For known slow operations:
+
+```yaml
+flow:
+  - task: SlowMigration
+    timeout: 10m
+    timeout_warning: 5m  # Log warning at 5m, fail at 10m
+```
+
+---
+
+## DAG-Based Execution
+
+### Dependency Declaration
+
+```yaml
+flow:
+  # Sequential (default)
+  - setup: CreateUser
+
+  # Parallel block - all run concurrently
+  - parallel:
+      - setup: SeedInventory
+      - setup: SeedPaymentMethods
+      - setup: LoadProductCatalog
+
+  # Explicit dependencies (DAG)
+  - task: AddToCart
+    depends_on: [CreateUser, LoadProductCatalog]
+
+  - task: CalculateShipping
+    depends_on: [AddToCart, SeedInventory]
+
+  - task: ProcessPayment
+    depends_on: [AddToCart, SeedPaymentMethods]
+
+  # Merge point - waits for all upstream
+  - task: CreateOrder
+    depends_on: [CalculateShipping, ProcessPayment]
+
+  - validation: OrderComplete
+```
+
+### Execution Graph
+
+```
+CreateUser ─────────────────────────────┐
+                                        ├── AddToCart ──┬── CalculateShipping ──┐
+LoadProductCatalog ─────────────────────┘               │                       │
+                                                        │                       ├── CreateOrder
+SeedInventory ──────────────────────────────────────────┘                       │
+                                                                                │
+SeedPaymentMethods ─────────────────────────────────────── ProcessPayment ──────┘
+```
+
+### Automatic Dependency Detection
+
+When `depends_on` is omitted, framework infers from `requires`:
+
+```yaml
+flow:
+  - setup: CreateUser        # produces: user:User
+  - setup: SeedCart          # requires: user:User (auto-depends on CreateUser)
+  - task: Checkout           # requires: user:User, cart:Cart (waits for both)
+```
+
+### Parallelism Limits
+
+```yaml
+execution:
+  dag:
+    max_parallel: 4          # Max concurrent steps in DAG
+    strategy: breadth_first  # breadth_first | depth_first
 ```
 
 ---

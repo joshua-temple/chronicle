@@ -18,6 +18,7 @@
   - [Flow Keyword](#flow-keyword)
   - [Scenario Inheritance](#scenario-inheritance)
   - [Parameterized Scenarios](#parameterized-scenarios)
+  - [Conditional Execution](#conditional-execution)
 - [Chaos Engineering](#chaos-engineering)
   - [Infrastructure Chaos](#infrastructure-chaos)
   - [Application Chaos](#application-chaos)
@@ -34,6 +35,7 @@
   - [Mock Definition](#mock-definition)
   - [Mock Injector Interface](#mock-injector-interface)
   - [Mock Profiles](#mock-profiles)
+  - [Mock Verification](#mock-verification)
 - [Bundle Registry](#bundle-registry)
   - [Infrastructure Bundles](#infrastructure-bundles)
   - [Flag Bundles](#flag-bundles)
@@ -137,6 +139,53 @@ scenarios:
       - validation: OrderTotal
 
 # Generates: 4 currencies × 3 quantities = 12 test runs
+```
+
+### Conditional Execution
+
+#### Skip Conditions
+
+```yaml
+scenarios:
+  - name: production-smoke
+    skip_if:
+      - condition: env.SKIP_SMOKE == "true"
+        reason: "Smoke tests disabled via environment"
+      - condition: flags.maintenance_mode == true
+        reason: "System in maintenance mode"
+    flow: [...]
+
+  - name: database-migration
+    skip_unless:
+      - condition: env.DATABASE_URL is set
+        reason: "Requires DATABASE_URL"
+      - condition: env.ENVIRONMENT in ["staging", "production"]
+        reason: "Only runs in staging/production"
+    flow: [...]
+```
+
+#### Condition Syntax
+
+| Expression | Meaning |
+|------------|---------|
+| `env.VAR == "value"` | Environment variable equals |
+| `env.VAR is set` | Environment variable exists |
+| `env.VAR is empty` | Environment variable is empty or unset |
+| `env.VAR in ["a", "b"]` | Environment variable in list |
+| `flags.name == true` | Flag value check |
+| `time.hour >= 9 and time.hour < 17` | Time-based (business hours) |
+| `weekday in ["mon", "tue", "wed"]` | Day-based |
+
+#### Runtime Skip
+
+```go
+// @witness:setup name="ConditionalSetup"
+func ConditionalSetup(ctx witness.Context) error {
+    if someCondition {
+        return witness.Skip("Condition not met: %v", reason)
+    }
+    // Continue with setup
+}
 ```
 
 ---
@@ -588,6 +637,88 @@ scenarios:
     chaos:
       profiles: [degraded-network]  # Mocks + chaos compose
     flow: [...]
+```
+
+### Mock Verification
+
+#### Verification Modes
+
+```go
+type MockVerificationMode string
+
+const (
+    // Strict - all registered stubs must be called exactly once
+    VerificationStrict MockVerificationMode = "strict"
+
+    // Lenient - stubs may be called any number of times (including zero)
+    VerificationLenient MockVerificationMode = "lenient"
+
+    // AtLeastOnce - all stubs must be called at least once
+    VerificationAtLeastOnce MockVerificationMode = "at_least_once"
+)
+```
+
+#### Verification Configuration
+
+```yaml
+mocks:
+  verification:
+    mode: at_least_once  # strict | lenient | at_least_once
+    on_failure: fail     # fail | warn | ignore
+    run_at: scenario_end # scenario_end | test_end | teardown
+
+  payment-gateway:
+    stubs:
+      - request: { method: POST, path: /charge }
+        response: { status: 200 }
+        # Per-stub verification override
+        expected_calls: 1  # Exactly once
+        # Or: expected_calls: "1-3"  # Between 1 and 3
+        # Or: expected_calls: "1+"   # At least once
+```
+
+#### Verification Results
+
+```go
+type MockVerificationResult struct {
+    MockName      string
+    Stub          string
+    ExpectedCalls string
+    ActualCalls   int
+    Passed        bool
+    UnmatchedCalls []UnmatchedCall  // Calls that didn't match any stub
+}
+```
+
+#### Programmatic Verification
+
+```go
+// @witness:validation name="VerifyPaymentCalls" requires="order:Order"
+func VerifyPaymentCalls(ctx witness.Context, result any) error {
+    verification, err := witness.VerifyMock(ctx, "payment-gateway")
+    if err != nil {
+        return err
+    }
+
+    if verification.CallCount("/charge") != 1 {
+        return fmt.Errorf("expected 1 charge call, got %d",
+            verification.CallCount("/charge"))
+    }
+
+    return nil
+}
+```
+
+#### Unmatched Call Handling
+
+```yaml
+mocks:
+  unmatched_calls:
+    action: record  # record | fail | passthrough
+
+    # If passthrough, forward to real service
+    passthrough:
+      payment-gateway: https://real-payment.internal
 ```
 
 ---

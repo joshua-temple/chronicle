@@ -15,6 +15,7 @@
 ## Table of Contents
 
 - [Test Data Management](#test-data-management)
+- [Data Management Limits](#data-management-limits)
 - [Contract Testing](#contract-testing)
 - [Performance Profiling](#performance-profiling)
 - [Flaky Test Detection](#flaky-test-detection)
@@ -122,6 +123,68 @@ witness run --scenario checkout-flow --update-snapshots
 
 # Compare against snapshots
 witness run --scenario checkout-flow  # Fails if mismatch
+```
+
+---
+
+## Data Management Limits
+
+### Context Value Limits
+
+```yaml
+limits:
+  context:
+    max_value_size: 10MB      # Single value limit
+    max_total_size: 100MB     # Total context limit
+    warn_threshold: 50MB      # Log warning at this threshold
+    on_exceed: fail           # fail | warn | truncate
+```
+
+### Fixture Limits
+
+```yaml
+data:
+  fixtures:
+    max_file_size: 50MB
+    max_memory: 200MB         # Total loaded fixtures
+
+    # Streaming for large files
+    - name: large-dataset
+      source: fixtures/large.json
+      streaming: true         # Stream instead of load all
+      chunk_size: 1000        # Records per chunk
+```
+
+### Streaming Large Datasets
+
+```go
+// @witness:setup name="LoadLargeData" produces="data_stream:DataStream"
+func LoadLargeData(ctx witness.Context) error {
+    stream := witness.FixtureStream[Record](ctx, "large-dataset")
+    witness.Set(ctx, "data_stream", stream)
+    return nil
+}
+
+// @witness:task name="ProcessData" requires="data_stream:DataStream"
+func ProcessData(ctx witness.Context) error {
+    stream := witness.Get[witness.DataStream[Record]](ctx, "data_stream")
+
+    for stream.Next() {
+        record := stream.Value()
+        // Process record
+    }
+    return stream.Err()
+}
+```
+
+### Memory Monitoring
+
+```yaml
+observability:
+  memory:
+    track_allocations: true
+    gc_before_scenario: false   # Force GC between scenarios
+    report_top_allocators: 5    # Show top 5 memory consumers
 ```
 
 ---

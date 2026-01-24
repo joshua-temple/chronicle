@@ -20,6 +20,7 @@
 - [Client Auto-Exposure](#client-auto-exposure)
 - [Reuse Behavior](#reuse-behavior)
 - [Environment Overlays](#environment-overlays)
+- [Secret Management](#secret-management)
 - [Custom Providers](#custom-providers)
 
 ---
@@ -433,6 +434,66 @@ base.yaml → local.yaml (extends base, overrides infra)
           → staging.yaml (extends base, overrides infra)
           → production.yaml (extends base, overrides infra + constraints)
 ```
+
+---
+
+## Secret Management
+
+### Variable Resolution
+
+Configuration values support variable interpolation:
+
+| Syntax | Source | Example |
+|--------|--------|---------|
+| `${VAR}` | Environment variable | `${POSTGRES_PASSWORD}` |
+| `${secrets.KEY}` | Secret provider | `${secrets.db-password}` |
+| `${vault:path/to/secret}` | HashiCorp Vault | `${vault:kv/data/db}` |
+
+### Secret Provider Interface
+
+```go
+type SecretProvider interface {
+    // Resolve retrieves a secret value
+    Resolve(ctx context.Context, key string) (string, error)
+
+    // Watch monitors for secret rotation (optional)
+    Watch(ctx context.Context, key string, callback func(newValue string)) error
+}
+```
+
+### Configuration
+
+```yaml
+secrets:
+  provider: vault  # or: env, aws-secrets-manager, gcp-secret-manager
+
+  vault:
+    address: https://vault.internal:8200
+    auth:
+      method: kubernetes  # or: token, approle
+      role: witness
+    cache_ttl: 5m
+
+  # Fallback to environment variables if secret not found
+  fallback_to_env: true
+```
+
+### Secret Rotation
+
+For long-running daemon mode, secrets can be rotated:
+
+```yaml
+secrets:
+  rotation:
+    enabled: true
+    check_interval: 5m
+    on_rotation: restart_providers  # or: hot_reload, ignore
+```
+
+When `on_rotation: hot_reload`:
+- Providers receive new credentials via `Reconfigure(config)` method
+- Active test runs complete with old credentials
+- New runs use refreshed credentials
 
 ---
 
