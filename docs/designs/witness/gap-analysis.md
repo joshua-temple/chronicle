@@ -335,36 +335,109 @@ Test Intelligence         | ██░░░░░░░░ 20%
 
 ---
 
-## Chronicle-Specific Strengths Not in Witness Design
+## Chronicle Features Now Incorporated into Witness Design
 
-These Chronicle features may warrant inclusion in the Witness design:
+The following Chronicle-specific patterns have been incorporated into the Witness design documents:
 
-1. **Chronicle Narrative Recording** (`chronicle/chronicle.go`)
-   - Execution story/narrative generation
-   - Multiple output formats (JSON, YAML, Markdown)
-   - Could enhance debugging and reporting
+### 1. Typed Identifiers with TraceID (01-core-framework.md)
 
-2. **Middleware System** (`runner/runner.go`)
-   - Composable middleware chain
-   - LoggingMiddleware, RetryMiddleware
-   - Cross-cutting concerns handling
+**Status:** ✅ **Incorporated**
 
-3. **BundleRegistry** (`registry/registry.go`)
-   - Infrastructure templates
-   - Flag bundles
-   - Option bundles
-   - Reusable configuration sets
+- Type-safe IDs: TestID, ScenarioID, ComponentID, ServiceID, TraceID, RunID
+- IDRegistry for tracking and validation
+- TraceID propagation through all execution
+- Header injection for distributed tracing (W3C, B3, Jaeger, custom formats)
+- Context baggage for metadata propagation to services under test
 
-4. **Typed Identifiers** (`core/identifiers.go`)
-   - Type-safe IDs (TestID, ServiceID, etc.)
-   - IDRegistry for tracking
-   - Prevents ID confusion bugs
+### 2. Middleware System (01-core-framework.md)
+
+**Status:** ✅ **Incorporated**
+
+- Composable middleware interface
+- Built-in middleware: Logging, Retry, Metrics, Tracing, Timeout
+- Custom middleware support via annotations
+- Middleware bundles for common patterns
+- Per-scenario middleware configuration
+
+### 3. Bundle Registry (03-scenarios-and-composition.md)
+
+**Status:** ✅ **Incorporated**
+
+- Infrastructure bundles (e.g., `standard-web-stack`, `kafka-stack`)
+- Flag bundles (e.g., `new-checkout-experience`)
+- Option bundles (e.g., `admin-testing`, `stress-testing`)
+- Middleware bundles (e.g., `observability`, `resilience`)
+- Bundle composition and inheritance
+
+### 4. Execution Narrative (05-results-and-reporting.md)
+
+**Status:** ✅ **Incorporated**
+
+- NarrativeEntry model capturing execution story
+- Automatic capture of component lifecycle, infrastructure events, chaos, retries
+- Multiple renderers: Markdown, JSON, YAML
+- Integration with Visual Execution Debugger
+- CLI access to narratives
+
+### 5. Reuse Behavior (02-infrastructure.md)
+
+**Status:** ✅ **Incorporated**
+
+- Three reuse modes: AlwaysFresh, ReuseWithFlush, FullReuse
+- FlushableProvider interface for state reset
+- Built-in flush strategies per provider type
+- Isolation levels: NoIsolation, DataIsolation, SchemaIsolation, InstanceIsolation
+- Per-scenario override configuration
+
+---
+
+## Updated Alignment Matrix
+
+After incorporating Chronicle features:
+
+```
+Feature Category          | Chronicle Coverage | Design Coverage
+--------------------------|-------------------|----------------
+Core Component Model      | ████████░░ 80%    | ██████████ 100%
+Infrastructure            | ██████░░░░ 60%    | ██████████ 100%
+Scenarios                 | █████░░░░░ 50%    | ██████████ 100%
+Execution                 | █████░░░░░ 50%    | ██████████ 100%
+Results & Reporting       | ███░░░░░░░ 30%    | ██████████ 100%
+UI Layer                  | ░░░░░░░░░░  0%    | ██████████ 100%
+Daemon Service API        | ██░░░░░░░░ 20%    | ██████████ 100%
+Multi-Language            | █░░░░░░░░░ 10%    | ██████████ 100%
+Extensibility             | ██░░░░░░░░ 20%    | ██████████ 100%
+Test Intelligence         | ██░░░░░░░░ 20%    | ██████████ 100%
+Distributed Tracing       | █░░░░░░░░░ 10%    | ██████████ 100%
+```
 
 ---
 
 ## Next Steps
 
 1. **Decide on naming**: Continue as "Chronicle" or rename to "Witness"?
-2. **Prioritize gaps**: Which features are most critical for your use case?
+2. **Prioritize implementation**: Which features from the design are most critical?
 3. **Define MVP scope**: What's needed for the first usable release?
 4. **Plan implementation**: Create detailed implementation plan for priority features
+
+### Suggested Implementation Order
+
+**Phase 1: Core Enhancements**
+- [ ] Add TraceID and header injection to existing Chronicle
+- [ ] Implement middleware system
+- [ ] Add reuse behavior to infrastructure providers
+
+**Phase 2: Configuration & Discovery**
+- [ ] YAML scenario loader
+- [ ] Annotation discovery (AST parsing)
+- [ ] Environment overlay system
+
+**Phase 3: Bundles & Intelligence**
+- [ ] Bundle registry implementation
+- [ ] Execution narrative capture
+- [ ] Narrative renderers
+
+**Phase 4: User Experience**
+- [ ] CLI implementation
+- [ ] TUI interface
+- [ ] Results persistence adapters

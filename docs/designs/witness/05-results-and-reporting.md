@@ -15,6 +15,7 @@
 ## Table of Contents
 
 - [Results Model](#results-model)
+- [Execution Narrative](#execution-narrative)
 - [Storage Adapters](#storage-adapters)
 - [Report Formats](#report-formats)
 - [Notifications](#notifications)
@@ -72,6 +73,256 @@ type ErrorDetail struct {
     Expected   any
     Actual     any
 }
+```
+
+---
+
+## Execution Narrative
+
+Beyond raw results, the framework captures a human-readable "story" of test execution that aids debugging and documentation.
+
+### Narrative Model
+
+```go
+type ExecutionNarrative struct {
+    RunID       RunID
+    TraceID     TraceID
+    Scenario    string
+    Environment string
+    StartTime   time.Time
+    EndTime     time.Time
+
+    // The story entries in execution order
+    Entries     []NarrativeEntry
+
+    // Summary statistics
+    Summary     NarrativeSummary
+}
+
+type NarrativeEntry struct {
+    Timestamp   time.Time
+    Level       NarrativeLevel  // trace, debug, info, warn, error
+    Component   string          // Which component generated this
+    SpanID      string          // For trace correlation
+    Action      string          // What was done
+    Details     map[string]any  // Contextual data
+    Duration    time.Duration   // How long it took (if applicable)
+}
+
+type NarrativeLevel string
+
+const (
+    LevelTrace NarrativeLevel = "trace"
+    LevelDebug NarrativeLevel = "debug"
+    LevelInfo  NarrativeLevel = "info"
+    LevelWarn  NarrativeLevel = "warn"
+    LevelError NarrativeLevel = "error"
+)
+
+type NarrativeSummary struct {
+    TotalDuration  time.Duration
+    ComponentCount int
+    ErrorCount     int
+    WarningCount   int
+    SlowSteps      []string  // Steps exceeding threshold
+}
+```
+
+### Capturing Narrative
+
+The framework automatically captures entries during execution:
+
+```go
+// Inside a component, logging adds to narrative
+func CreateUser(ctx witness.Context) error {
+    ctx.Narrate(Info, "Creating test user", map[string]any{
+        "email": "test@example.com",
+    })
+
+    // ... create user ...
+
+    ctx.Narrate(Debug, "User created successfully", map[string]any{
+        "user_id": user.ID,
+    })
+
+    return nil
+}
+```
+
+### Automatic Narrative Capture
+
+Framework captures key events automatically:
+
+| Event | Level | Example |
+|-------|-------|---------|
+| Component start | `info` | "Starting CreateUser" |
+| Component end | `info` | "Completed CreateUser in 120ms" |
+| Infrastructure event | `debug` | "PostgreSQL container started" |
+| Mock setup | `debug` | "Registered 3 stubs for payment-gateway" |
+| Chaos injection | `warn` | "Injecting 200ms latency to payment-service" |
+| Retry attempt | `warn` | "Retry 2/3 for ProcessPayment" |
+| Failure | `error` | "ProcessPayment failed: timeout" |
+| Recovery | `info` | "Circuit breaker reset" |
+
+### Narrative Renderers
+
+Narratives can be rendered in multiple formats:
+
+**Markdown:**
+
+```markdown
+# Execution Narrative: checkout-flow
+
+**Run ID:** run_abc123
+**Trace ID:** trace_xyz789
+**Duration:** 4.2s
+**Status:** Failed
+
+## Timeline
+
+| Time | Component | Action | Duration |
+|------|-----------|--------|----------|
+| 0.0s | CreateUser | Starting | - |
+| 0.1s | CreateUser | User created (id: usr_123) | 120ms |
+| 0.1s | SeedCart | Starting | - |
+| 0.3s | SeedCart | Added 3 items to cart | 180ms |
+| 0.3s | Checkout | Starting | - |
+| 0.5s | Checkout | ⚠️ Injecting 200ms latency | - |
+| 2.8s | Checkout | ❌ Failed: timeout after 2s | 2.3s |
+
+## Error Details
+
+**Component:** Checkout
+**Message:** timeout after 2s
+**Stack:**
+    at ProcessPayment (checkout.go:45)
+    at Checkout (checkout.go:23)
+```
+
+**JSON:**
+
+```json
+{
+  "run_id": "run_abc123",
+  "trace_id": "trace_xyz789",
+  "scenario": "checkout-flow",
+  "entries": [
+    {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "level": "info",
+      "component": "CreateUser",
+      "action": "Starting",
+      "duration_ms": null
+    },
+    {
+      "timestamp": "2024-01-15T10:30:00.120Z",
+      "level": "info",
+      "component": "CreateUser",
+      "action": "User created",
+      "details": { "user_id": "usr_123" },
+      "duration_ms": 120
+    }
+  ]
+}
+```
+
+**YAML:**
+
+```yaml
+run_id: run_abc123
+trace_id: trace_xyz789
+scenario: checkout-flow
+entries:
+  - timestamp: 2024-01-15T10:30:00Z
+    level: info
+    component: CreateUser
+    action: Starting
+  - timestamp: 2024-01-15T10:30:00.120Z
+    level: info
+    component: CreateUser
+    action: User created
+    details:
+      user_id: usr_123
+    duration_ms: 120
+```
+
+### Configuration
+
+```yaml
+narrative:
+  enabled: true
+  level: info  # Minimum level to capture (trace, debug, info, warn, error)
+
+  # Automatic capture settings
+  auto_capture:
+    component_lifecycle: true  # Start/end of components
+    infrastructure_events: true
+    mock_events: true
+    chaos_events: true
+    retry_attempts: true
+
+  # Slow step detection
+  slow_threshold: 5s  # Mark steps exceeding this as slow
+
+  # Rendering
+  renderers:
+    - format: markdown
+      output: ./narratives/{{run_id}}.md
+    - format: json
+      output: ./narratives/{{run_id}}.json
+
+  # Retention
+  retention: 30d
+```
+
+### CLI Access
+
+```bash
+# View narrative for latest run
+witness narrative --latest
+
+# View narrative for specific run
+witness narrative --run-id run_abc123
+
+# Export narrative
+witness narrative --run-id run_abc123 --format markdown --output story.md
+
+# Filter by level
+witness narrative --run-id run_abc123 --level warn
+
+# Follow in real-time (during execution)
+witness narrative --follow
+```
+
+### Visual Debugger Integration
+
+The narrative powers the Visual Execution Debugger in the UI:
+
+```
+┌─ Execution Debugger ───────────────────────────────────────────┐
+│                                                                │
+│  [▶ Play] [⏸ Pause] [⏭ Step] [⏮ Back]     Speed: [1x ▼]      │
+│                                                                │
+│  Timeline: ═══════●══════════════════════════════════════      │
+│            0.0s   0.5s                                  4.2s   │
+│                                                                │
+│  ┌─ Active Component ─────────────────────────────────────┐   │
+│  │  Checkout (0.5s - 2.8s)                                │   │
+│  │  Status: Failed                                        │   │
+│  │                                                        │   │
+│  │  Narrative:                                            │   │
+│  │  [0.5s] Starting checkout process                      │   │
+│  │  [0.5s] ⚠️ Chaos: Injecting 200ms latency              │   │
+│  │  [1.2s] Calling payment service...                     │   │
+│  │  [2.8s] ❌ Timeout after 2s                            │   │
+│  └────────────────────────────────────────────────────────┘   │
+│                                                                │
+│  Context State at 0.5s:                                        │
+│  ┌────────────────────────────────────────────────────────┐   │
+│  │ user: { id: "usr_123", email: "test@example.com" }    │   │
+│  │ cart: { items: 3, total: 99.99 }                      │   │
+│  └────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---

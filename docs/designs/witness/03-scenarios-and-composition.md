@@ -34,6 +34,11 @@
   - [Mock Definition](#mock-definition)
   - [Mock Injector Interface](#mock-injector-interface)
   - [Mock Profiles](#mock-profiles)
+- [Bundle Registry](#bundle-registry)
+  - [Infrastructure Bundles](#infrastructure-bundles)
+  - [Flag Bundles](#flag-bundles)
+  - [Option Bundles](#option-bundles)
+  - [Middleware Bundles](#middleware-bundles)
 
 ---
 
@@ -584,6 +589,257 @@ scenarios:
       profiles: [degraded-network]  # Mocks + chaos compose
     flow: [...]
 ```
+
+---
+
+## Bundle Registry
+
+Pre-packaged, reusable configurations for common patterns. Bundles provide named collections of infrastructure, flags, options, and middleware.
+
+### Infrastructure Bundles
+
+Named combinations of infrastructure services:
+
+```yaml
+bundles:
+  infrastructure:
+    standard-web-stack:
+      description: "Common web application infrastructure"
+      services:
+        - postgres:
+            provider: postgres
+            config:
+              image: postgres:15
+        - redis:
+            provider: redis
+            config:
+              image: redis:7
+
+    event-driven-stack:
+      description: "Event-driven microservices infrastructure"
+      services:
+        - kafka:
+            provider: kafka
+            config:
+              image: confluentinc/cp-kafka:7.5.0
+        - zookeeper:
+            provider: zookeeper
+            config:
+              image: confluentinc/cp-zookeeper:7.5.0
+        - schema-registry:
+            provider: schema-registry
+            config:
+              image: confluentinc/cp-schema-registry:7.5.0
+
+    aws-local:
+      description: "LocalStack for AWS services"
+      services:
+        - localstack:
+            provider: localstack
+            config:
+              services: [s3, sqs, dynamodb, lambda]
+```
+
+**Using Infrastructure Bundles:**
+
+```yaml
+infrastructure:
+  bundle: standard-web-stack  # Use pre-defined bundle
+  additional:                  # Add more services
+    - elasticsearch:
+        provider: elasticsearch
+```
+
+### Flag Bundles
+
+Named groups of related feature flags:
+
+```yaml
+bundles:
+  flags:
+    new-checkout-experience:
+      description: "All flags for new checkout"
+      values:
+        new-checkout-flow: true
+        instant-payment: true
+        one-click-buy: true
+
+    legacy-mode:
+      description: "Disable all new features"
+      values:
+        new-checkout-flow: false
+        instant-payment: false
+        one-click-buy: false
+        new-inventory-system: false
+
+    payment-v2:
+      description: "New payment processing flags"
+      values:
+        payment-provider: stripe-v2
+        payment-retry-enabled: true
+        payment-timeout-ms: 30000
+```
+
+**Using Flag Bundles:**
+
+```yaml
+scenarios:
+  - name: checkout-new-experience
+    flag_bundles: [new-checkout-experience, payment-v2]
+    flow: [...]
+
+  - name: checkout-legacy
+    flag_bundles: [legacy-mode]
+    flow: [...]
+```
+
+**CLI:**
+
+```bash
+witness run --scenario checkout --flag-bundle new-checkout-experience
+```
+
+### Option Bundles
+
+Named groups of scenario mutations:
+
+```yaml
+bundles:
+  options:
+    admin-testing:
+      description: "Run scenarios as admin user"
+      options:
+        - as-admin-user
+        - with-elevated-permissions
+        - bypass-rate-limit
+
+    stress-testing:
+      description: "High volume with chaos"
+      options:
+        - high-volume
+        - with-slow-network
+        - extended-timeout
+
+    minimal-setup:
+      description: "Skip optional setup steps"
+      options:
+        - skip-analytics
+        - skip-notifications
+        - mock-external-services
+```
+
+**Using Option Bundles:**
+
+```yaml
+scenarios:
+  - name: checkout-admin-stress
+    option_bundles: [admin-testing, stress-testing]
+    flow: [...]
+```
+
+### Middleware Bundles
+
+Named groups of middleware configurations:
+
+```yaml
+bundles:
+  middleware:
+    observability:
+      description: "Full observability stack"
+      middleware:
+        - logging
+        - tracing
+        - metrics
+
+    resilience:
+      description: "Retry and timeout handling"
+      middleware:
+        - retry:
+            max_attempts: 3
+            backoff: exponential
+        - timeout: 30s
+        - circuit-breaker:
+            threshold: 5
+
+    debugging:
+      description: "Verbose debugging"
+      middleware:
+        - logging:
+            level: debug
+        - tracing:
+            verbose: true
+        - slow-step-detection:
+            threshold: 5s
+```
+
+**Using Middleware Bundles:**
+
+```yaml
+execution:
+  middleware_bundles: [observability, resilience]
+
+  scenarios:
+    checkout-debugging:
+      middleware_bundles: [debugging]  # Override with debug bundle
+```
+
+### Bundle Composition
+
+Bundles can extend other bundles:
+
+```yaml
+bundles:
+  infrastructure:
+    base-services:
+      services:
+        - postgres
+        - redis
+
+    full-stack:
+      extends: base-services
+      services:
+        - kafka
+        - elasticsearch
+```
+
+### Bundle Registry API
+
+```go
+type BundleRegistry struct {
+    Infrastructure map[string]InfrastructureBundle
+    Flags          map[string]FlagBundle
+    Options        map[string]OptionBundle
+    Middleware     map[string]MiddlewareBundle
+}
+
+// Register custom bundles programmatically
+func (r *BundleRegistry) RegisterInfrastructure(name string, bundle InfrastructureBundle)
+func (r *BundleRegistry) RegisterFlags(name string, bundle FlagBundle)
+func (r *BundleRegistry) RegisterOptions(name string, bundle OptionBundle)
+func (r *BundleRegistry) RegisterMiddleware(name string, bundle MiddlewareBundle)
+
+// Resolve bundles to concrete configuration
+func (r *BundleRegistry) ResolveInfrastructure(names []string) ([]Service, error)
+func (r *BundleRegistry) ResolveFlags(names []string) (map[string]any, error)
+func (r *BundleRegistry) ResolveOptions(names []string) ([]Option, error)
+func (r *BundleRegistry) ResolveMiddleware(names []string) ([]Middleware, error)
+```
+
+### Built-in Bundles
+
+Framework ships with common bundles:
+
+| Category | Bundle Name | Contents |
+|----------|-------------|----------|
+| Infrastructure | `postgres-redis` | PostgreSQL + Redis |
+| Infrastructure | `kafka-stack` | Kafka + Zookeeper + Schema Registry |
+| Infrastructure | `aws-local` | LocalStack with common services |
+| Flags | `all-features-on` | Enable all feature flags |
+| Flags | `all-features-off` | Disable all feature flags |
+| Options | `stress-test` | High volume + chaos |
+| Options | `quick-test` | Skip slow steps |
+| Middleware | `observability` | Logging + Tracing + Metrics |
+| Middleware | `resilience` | Retry + Timeout + Circuit Breaker |
 
 ---
 

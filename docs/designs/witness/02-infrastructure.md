@@ -18,6 +18,7 @@
 - [Provider Interface](#provider-interface)
 - [Built-in Providers](#built-in-providers)
 - [Client Auto-Exposure](#client-auto-exposure)
+- [Reuse Behavior](#reuse-behavior)
 - [Environment Overlays](#environment-overlays)
 - [Custom Providers](#custom-providers)
 
@@ -165,6 +166,154 @@ func QueryOrders(ctx witness.Context) (*Orders, error) {
 | `kafka` | `*kafka.Writer` / `*kafka.Reader` |
 | `dynamodb` | `*dynamodb.Client` |
 | `mongodb` | `*mongo.Client` |
+
+---
+
+## Reuse Behavior
+
+Infrastructure lifecycle between test executions can be configured for different trade-offs between speed and isolation.
+
+### Reuse Modes
+
+```go
+type ReuseBehavior int
+
+const (
+    // AlwaysFresh - destroy and recreate infrastructure for each test
+    // Slowest, but maximum isolation
+    AlwaysFresh ReuseBehavior = iota
+
+    // ReuseWithFlush - keep infrastructure alive, flush/reset state between tests
+    // Fast startup, good isolation (data cleared)
+    ReuseWithFlush
+
+    // FullReuse - keep infrastructure alive and state intact
+    // Fastest, useful for debugging or sequential test dependencies
+    FullReuse
+)
+```
+
+### Configuration
+
+```yaml
+infrastructure:
+  postgres:
+    provider: postgres
+    config:
+      mode: container
+      image: postgres:15
+
+    # Reuse behavior
+    reuse: flush  # always_fresh | flush | full
+
+    # Flush configuration (when reuse: flush)
+    flush:
+      strategy: truncate  # truncate | drop_recreate | custom
+      tables:
+        - users
+        - orders
+        - sessions
+      exclude:
+        - migrations
+        - reference_data
+
+  redis:
+    provider: redis
+    config:
+      mode: container
+    reuse: flush
+    flush:
+      strategy: flushdb  # flushdb | flushall | pattern
+      pattern: "test:*"  # When strategy: pattern
+```
+
+### Provider Flush Interface
+
+Providers implement flush for their specific data stores:
+
+```go
+type FlushableProvider interface {
+    InfraProvider
+
+    // Flush resets state while keeping the infrastructure running
+    Flush(ctx context.Context) error
+
+    // FlushWithConfig allows custom flush behavior
+    FlushWithConfig(ctx context.Context, config FlushConfig) error
+}
+
+type FlushConfig struct {
+    Strategy string            // Provider-specific strategy
+    Include  []string          // Items to flush
+    Exclude  []string          // Items to preserve
+    Options  map[string]any    // Additional options
+}
+```
+
+### Built-in Flush Strategies
+
+| Provider | Strategy | Description |
+|----------|----------|-------------|
+| `postgres` | `truncate` | TRUNCATE specified tables |
+| `postgres` | `drop_recreate` | DROP and recreate schema |
+| `redis` | `flushdb` | FLUSHDB current database |
+| `redis` | `pattern` | DEL keys matching pattern |
+| `kafka` | `delete_topics` | Delete and recreate topics |
+| `mongodb` | `drop_collections` | Drop specified collections |
+
+### Isolation Levels
+
+For finer control, combine reuse behavior with isolation levels:
+
+```go
+type IsolationLevel int
+
+const (
+    // NoIsolation - tests share state (use with FullReuse)
+    NoIsolation IsolationLevel = iota
+
+    // DataIsolation - flush data between tests
+    DataIsolation
+
+    // SchemaIsolation - separate schemas per test
+    SchemaIsolation
+
+    // InstanceIsolation - separate container instances per test
+    InstanceIsolation
+)
+```
+
+### Configuration Example
+
+```yaml
+execution:
+  # Default reuse behavior
+  default_reuse: flush
+
+  # Per-scenario overrides
+  scenarios:
+    checkout-flow:
+      reuse: flush
+      isolation: data
+
+    debugging-session:
+      reuse: full
+      isolation: none
+
+    schema-migration-test:
+      reuse: always_fresh
+      isolation: instance
+```
+
+### Use Cases
+
+| Use Case | Reuse | Isolation | Rationale |
+|----------|-------|-----------|-----------|
+| Fast iteration | `flush` | `data` | Quick feedback, clean slate |
+| CI pipeline | `flush` | `data` | Balance speed and reliability |
+| Debugging | `full` | `none` | Inspect state between runs |
+| Schema tests | `always_fresh` | `instance` | Test migrations from scratch |
+| Parallel execution | `flush` | `schema` | Avoid data collisions |
 
 ---
 

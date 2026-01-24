@@ -122,12 +122,16 @@ The framework is an **orchestrator**, not an implementor. It answers "what runs 
 - Typed context with declared produces/requires dependencies
 - User-annotated types (including aliases for imports)
 - `flow` keyword supports any component type
+- Typed identifiers (TestID, ScenarioID, ComponentID, TraceID, etc.)
+- Composable middleware system for cross-cutting concerns
 
 ### Infrastructure
 - Three-layer model (Infra → Seed/Setup → Services)
 - Built-in providers for common infra (Postgres, Redis, Kafka, etc.)
 - Provider interface for custom implementations
 - Auto-exposed clients to components
+- Reuse behavior (always fresh, flush between tests, full reuse)
+- Isolation levels (data, schema, instance)
 
 ### Chaos Engineering
 - Infrastructure chaos (latency, partitions, outages, resource limits)
@@ -146,6 +150,12 @@ The framework is an **orchestrator**, not an implementor. It answers "what runs 
 - Framework-agnostic mock schema (user defines)
 - MockInjector interface (user implements injection mechanism)
 - Reusable mock profiles
+
+### Bundle Registry
+- Infrastructure bundles (pre-packaged service combinations)
+- Flag bundles (related feature flags grouped)
+- Option bundles (scenario mutation presets)
+- Middleware bundles (cross-cutting concern sets)
 
 ### Configuration
 - YAML as source of truth
@@ -166,10 +176,18 @@ The framework is an **orchestrator**, not an implementor. It answers "what runs 
 - Test impact analysis (run affected tests only)
 - Scenario inheritance and matrix parameterization
 
+### Distributed Tracing
+- TraceID propagation through all execution
+- Header injection for service correlation (W3C, B3, Jaeger, custom)
+- Context baggage for test metadata propagation
+- Span hierarchy for component nesting
+
 ### Results & Reporting
 - Pluggable storage adapters
 - Multiple report formats
 - Configurable notifications
+- Execution narrative (human-readable execution story)
+- Multiple narrative renderers (Markdown, JSON, YAML)
 
 ### UI Layer
 - Web UI, TUI, IDE plugins
