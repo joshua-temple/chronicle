@@ -27,6 +27,92 @@
 
 ---
 
+## Context Control
+
+> **Critical:** This implementation spans multiple context windows. Follow these rules to prevent context rot.
+
+### Progress Tracking
+
+Maintain `docs/designs/witness/PROGRESS.md` as the single source of truth for implementation state:
+
+```markdown
+# Witness Implementation Progress
+
+## Current Phase: [X]
+## Current Step: [X.Y]
+## Status: [in_progress | blocked | completed]
+
+## Completed Phases
+- [x] Phase 0: Setup (commit: abc1234)
+- [ ] Phase 1: Core Framework
+  - [x] 1.1 Typed Identifiers (commit: def5678)
+  - [ ] 1.2 Component Types
+  ...
+
+## Blocking Issues
+- None
+
+## Next Action
+[Specific next step to take]
+```
+
+### Phase Isolation Rules
+
+1. **One phase per session** - Complete one phase before starting another
+2. **Commit after each step** - Every numbered step (1.1, 1.2, etc.) gets its own commit
+3. **Update PROGRESS.md after every commit** - This is the context restoration point
+4. **Each phase is self-contained** - Reference design docs, not previous conversation
+
+### Context Restoration Protocol
+
+When starting a new session or after context compaction:
+
+```
+1. Read PROGRESS.md to understand current state
+2. Read the design doc for current phase (e.g., 01-core-framework.md)
+3. Read relevant existing code files for current step
+4. Continue from "Next Action" in PROGRESS.md
+```
+
+### Checkpoint Commands
+
+After completing each step, run:
+
+```bash
+# 1. Verify tests pass
+go test ./pkg/witness/... -v
+
+# 2. Verify lint passes
+golangci-lint run ./pkg/witness/...
+
+# 3. Commit the step
+git add -A && git commit -m "feat(scope): description"
+
+# 4. Update PROGRESS.md
+# Mark step complete, update "Next Action"
+```
+
+### State Preservation Files
+
+These files persist knowledge across context windows:
+
+| File | Purpose |
+|------|---------|
+| `PROGRESS.md` | Current implementation state |
+| `go.mod` | Dependencies and module structure |
+| `*_test.go` | Expected behavior documentation |
+| Design docs | Authoritative specifications |
+
+### Anti-Patterns to Avoid
+
+- **Don't** reference "earlier in this conversation" - use files instead
+- **Don't** assume knowledge from previous sessions - re-read relevant files
+- **Don't** batch multiple steps into one commit - granular commits aid restoration
+- **Don't** skip PROGRESS.md updates - this causes context rot
+- **Don't** implement ahead of the current phase - stay focused
+
+---
+
 ## Pre-Implementation Setup
 
 ### Step 0.1: Create Feature Branch
@@ -366,6 +452,32 @@ func TestDiscovery(t *testing.T) {
 
 Commit: `feat(examples): add basic component discovery example`
 
+### Phase 1 Completion Checkpoint
+
+Before proceeding to Phase 2:
+
+```bash
+# Verify all Phase 1 tests pass
+go test ./pkg/witness/core/... ./pkg/witness/context/... ./pkg/witness/discovery/... ./pkg/witness/middleware/... ./examples/basic/... -v
+
+# Verify lint passes
+golangci-lint run ./pkg/witness/...
+
+# Update PROGRESS.md
+# - Mark all Phase 1 steps complete
+# - Set Current Phase: 2
+# - Set Next Action: "Start Phase 2: YAML Configuration"
+```
+
+**Files that should exist:**
+- `pkg/witness/core/identifiers.go` + `_test.go`
+- `pkg/witness/core/components.go` + `_test.go`
+- `pkg/witness/context/context.go` + `_test.go`
+- `pkg/witness/discovery/parser.go` + `_test.go`
+- `pkg/witness/discovery/registry.go` + `_test.go`
+- `pkg/witness/middleware/middleware.go` + `_test.go`
+- `examples/basic/types.go`, `components.go`, `basic_test.go`
+
 ---
 
 ## Phase 2: Configuration & Scenarios
@@ -539,6 +651,18 @@ func TestScenarioLoading(t *testing.T) {
 ```
 
 Commit: `feat(examples): add scenario configuration examples`
+
+### Phase 2 Completion Checkpoint
+
+```bash
+go test ./pkg/witness/config/... ./pkg/witness/scenario/... -v
+golangci-lint run ./pkg/witness/config/... ./pkg/witness/scenario/...
+# Update PROGRESS.md - set Current Phase: 3
+```
+
+**Files that should exist:**
+- `pkg/witness/config/loader.go`, `schema.go`, `validation.go` + tests
+- `pkg/witness/scenario/scenario.go`, `builder.go`, `resolver.go`, `conditions.go` + tests
 
 ---
 
@@ -818,6 +942,20 @@ func (r *Runner) RunAll(ctx context.Context, filter Filter) ([]*Result, error)
 
 Commit: `feat(execution): add integrated runner`
 
+### Phase 4 Completion Checkpoint (Core Runnable)
+
+> **Milestone:** At this point, the core framework can discover, configure, and execute scenarios.
+
+```bash
+# Full test suite for core
+go test ./pkg/witness/... -v
+golangci-lint run ./pkg/witness/...
+
+# Update PROGRESS.md - set Current Phase: 5
+```
+
+**Integration test:** The basic example should now be executable (even without results storage).
+
 ---
 
 ## Phase 5: Results & Reporting
@@ -1079,6 +1217,19 @@ scenarios:
 
 Commit: `feat(examples): add chaos and mock examples`
 
+### Phase 6 Completion Checkpoint (Full Feature Set)
+
+> **Milestone:** All core features implemented. Chaos and mocks working.
+
+```bash
+go test ./pkg/witness/... ./examples/... -v
+golangci-lint run ./...
+
+# Update PROGRESS.md - set Current Phase: 7
+```
+
+**All framework features complete.** Remaining phases add CLI/API interfaces.
+
 ---
 
 ## Phase 7: CLI
@@ -1210,6 +1361,25 @@ func (w *ConfigWatcher) Start(ctx context.Context) error
 ```
 
 Commit: `feat(daemon): add configuration hot reload`
+
+### Phase 8 Completion Checkpoint (Complete System)
+
+> **Milestone:** Full system with CLI and daemon API.
+
+```bash
+# Test everything
+go test ./... -v
+golangci-lint run ./...
+
+# Verify CLI works
+go build -o witness ./cmd/witness
+./witness --help
+./witness discover --help
+
+# Update PROGRESS.md - set Current Phase: 9
+```
+
+**System is feature-complete.** Phase 9-10 are validation and polish.
 
 ---
 
