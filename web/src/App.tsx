@@ -1,10 +1,7 @@
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import { Dashboard } from '@/pages/Dashboard'
-
-function Scenarios() {
-  return <div className="text-2xl font-bold">Scenarios</div>
-}
+import { Scenarios } from '@/pages/Scenarios'
 
 function Runs() {
   return <div className="text-2xl font-bold">Runs</div>
