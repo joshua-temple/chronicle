@@ -44,6 +44,7 @@ export function RunCard({ run, onCancel }: RunCardProps) {
             size="sm"
             className="mt-2"
             onClick={() => onCancel(run.id)}
+            aria-label="Cancel run"
           >
             Cancel
           </Button>
