@@ -21,9 +21,10 @@ Chronicle implementation is **substantially complete** with all core phases impl
 - REST API daemon with authentication and hot reload
 - Terminal UI (TUI) with bubbletea
 - Test intelligence (flaky detection, performance tracking, impact analysis)
+- Web UI with React SPA (dashboard, scenarios, runs, results, components browser)
 
 **Remaining Gaps (Future Work):**
-- Web UI (scenario builder, dashboard)
+- Web UI Scenario Builder (visual WYSIWYG editor)
 - IDE plugins (VS Code, IntelliJ)
 - Multi-language SDKs (Python, Java, TypeScript)
 - Kubernetes deployment artifacts
@@ -113,12 +114,13 @@ Chronicle implementation is **substantially complete** with all core phases impl
 
 | Feature | Design | Status | Location |
 |---------|--------|--------|----------|
-| **Web UI** | WYSIWYG scenario builder | ❌ Not Implemented | - |
+| **Web UI Dashboard** | Runs, results, components | ✅ Implemented | `web/src/pages/` |
+| **Web UI Scenario Builder** | WYSIWYG editor | ❌ Not Implemented | - |
 | **Terminal UI (TUI)** | Interactive terminal | ✅ Implemented | `pkg/tui/` |
 | **IDE Plugins** | VS Code, IntelliJ | ❌ Not Implemented | - |
-| **Live Execution View** | Real-time streaming | ✅ Implemented | `pkg/tui/app.go`, `pkg/daemon/eventbus.go` |
+| **Live Execution View** | Real-time streaming (SSE) | ✅ Implemented | `web/src/stores/events.ts`, `pkg/daemon/sse.go` |
 
-**Coverage: 40%** (TUI implemented, Web UI and IDE plugins pending)
+**Coverage: 70%** (Web UI dashboard and TUI implemented, scenario builder and IDE plugins pending)
 
 ---
 
@@ -190,13 +192,13 @@ Infrastructure            | █████████░  95%
 Scenarios & Composition   | ██████████ 100%
 Execution                 | █████████░  90%
 Results & Reporting       | █████████░  90%
-UI Layer                  | ████░░░░░░  40%
+UI Layer                  | ███████░░░  70%
 Daemon Service API        | ████████░░  85%
 Multi-Language            | ███░░░░░░░  30%
 Extensibility             | ███████░░░  70%
 Test Intelligence         | ████████░░  80%
 --------------------------|----------------------
-Overall                   | ████████░░  78%
+Overall                   | ████████░░  81%
 ```
 
 ---
@@ -205,11 +207,11 @@ Overall                   | ████████░░  78%
 
 ### High Priority
 
-1. **Web UI**
-   - WYSIWYG scenario builder
-   - Results dashboard
-   - Configuration editor
-   - Real-time execution monitoring
+1. **Web UI Scenario Builder**
+   - WYSIWYG scenario builder (visual flow editor)
+   - Drag-and-drop component palette
+   - Dependency visualization
+   - YAML export
 
 2. **Kubernetes Integration**
    - Helm charts
@@ -255,7 +257,7 @@ Overall                   | ████████░░  78%
 
 ## Conclusion
 
-Chronicle implementation has achieved **~78% coverage** of the original Witness design vision. All core features required for production use are implemented:
+Chronicle implementation has achieved **~81% coverage** of the original Witness design vision. All core features required for production use are implemented:
 
 - ✅ Component-based test composition
 - ✅ Annotation discovery
@@ -265,8 +267,9 @@ Chronicle implementation has achieved **~78% coverage** of the original Witness 
 - ✅ Chaos engineering
 - ✅ Mock system
 - ✅ CLI tools
-- ✅ REST API daemon
+- ✅ REST API daemon with SSE events
 - ✅ Terminal UI (TUI)
+- ✅ Web UI (dashboard, scenarios, runs, results, components browser)
 - ✅ Test intelligence (flaky detection, performance tracking, impact analysis)
 
-The remaining gaps are primarily in web UI, multi-language SDKs, and deployment tooling, which can be added incrementally as needed.
+The remaining gaps are primarily in the visual scenario builder, multi-language SDKs, and deployment tooling, which can be added incrementally as needed.
