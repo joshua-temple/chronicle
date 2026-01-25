@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/joshua-temple/chronicle/web"
@@ -29,6 +30,11 @@ type Server struct {
 
 	httpServer *http.Server
 	webFS      fs.FS
+
+	// Component discovery cache
+	componentsMu sync.RWMutex
+	components   []DiscoveredComponent
+	discoveredAt time.Time
 }
 
 // Option configures a Server.
@@ -185,20 +191,6 @@ func (s *Server) devModeHandler() http.Handler {
 </body>
 </html>`))
 	})
-}
-
-// API Handler placeholders
-
-// handleDiscover runs component discovery.
-func (s *Server) handleDiscover(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder - will be implemented in a later task
-	writeJSON(w, http.StatusOK, map[string]any{})
-}
-
-// handleGetComponents returns discovered components.
-func (s *Server) handleGetComponents(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder - will be implemented in a later task
-	writeJSON(w, http.StatusOK, map[string]any{"components": []any{}})
 }
 
 // Helper functions for JSON responses.

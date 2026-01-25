@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/joshua-temple/chronicle/pkg/config"
+	"github.com/joshua-temple/chronicle/pkg/discovery"
 	"gopkg.in/yaml.v3"
 )
 
@@ -148,4 +149,97 @@ func (s *Server) handleValidateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+// DiscoveredComponent represents a discovered component.
+type DiscoveredComponent struct {
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Produces    []string `json:"produces"`
+	Requires    []string `json:"requires"`
+	SourceFile  string   `json:"source_file"`
+}
+
+// DiscoveryResult contains discovery results.
+type DiscoveryResult struct {
+	Components   []DiscoveredComponent `json:"components"`
+	DiscoveredAt time.Time             `json:"discovered_at"`
+}
+
+func (s *Server) handleDiscover(w http.ResponseWriter, _ *http.Request) {
+	parser := discovery.NewParser(s.dir)
+	registry, err := parser.Discover()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "discovery failed", err)
+		return
+	}
+
+	components := make([]DiscoveredComponent, 0, len(registry.Components))
+	for _, c := range registry.Components {
+		tags := c.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+
+		produces := make([]string, 0, len(c.Produces))
+		for _, p := range c.Produces {
+			if p.Type != "" {
+				produces = append(produces, p.Key+":"+p.Type)
+			} else {
+				produces = append(produces, p.Key)
+			}
+		}
+
+		requires := make([]string, 0, len(c.Requires))
+		for _, r := range c.Requires {
+			if r.Type != "" {
+				requires = append(requires, r.Key+":"+r.Type)
+			} else {
+				requires = append(requires, r.Key)
+			}
+		}
+
+		components = append(components, DiscoveredComponent{
+			Name:        c.Name,
+			Type:        string(c.Type),
+			Description: c.Description,
+			Tags:        tags,
+			Produces:    produces,
+			Requires:    requires,
+			SourceFile:  c.SourceFile,
+		})
+	}
+
+	now := time.Now()
+	s.componentsMu.Lock()
+	s.components = components
+	s.discoveredAt = now
+	s.componentsMu.Unlock()
+
+	writeJSON(w, http.StatusOK, DiscoveryResult{
+		Components:   components,
+		DiscoveredAt: now,
+	})
+}
+
+func (s *Server) handleGetComponents(w http.ResponseWriter, _ *http.Request) {
+	s.componentsMu.RLock()
+	components := s.components
+	discoveredAt := s.discoveredAt
+	s.componentsMu.RUnlock()
+
+	if components == nil {
+		writeJSON(w, http.StatusOK, DiscoveryResult{
+			Components:   []DiscoveredComponent{},
+			DiscoveredAt: time.Time{},
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, DiscoveryResult{
+		Components:   components,
+		DiscoveredAt: discoveredAt,
+	})
 }

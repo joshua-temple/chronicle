@@ -377,3 +377,220 @@ func TestServer_HandlePutConfig_ValidationFailed(t *testing.T) {
 		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestServer_HandleDiscover(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := New(WithDir(tmpDir))
+
+	req := httptest.NewRequest("POST", "/api/local/discover", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result DiscoveryResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	// Empty directory should have no components
+	if len(result.Components) != 0 {
+		t.Errorf("expected 0 components, got %d", len(result.Components))
+	}
+
+	if result.DiscoveredAt.IsZero() {
+		t.Error("expected non-zero discovery time")
+	}
+}
+
+func TestServer_HandleDiscover_WithAnnotatedCode(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a Go file with Chronicle annotations
+	goCode := `package testpkg
+
+// @chronicle:setup name="CreateUser" produces="user:User"
+// @chronicle:description "Creates a test user"
+// @chronicle:tags auth, user
+func CreateUser() {}
+
+// @chronicle:task name="ProcessOrder" requires="user:User" produces="order:Order"
+func ProcessOrder() {}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "components.go"), []byte(goCode), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(WithDir(tmpDir))
+	req := httptest.NewRequest("POST", "/api/local/discover", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var result DiscoveryResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should find the annotated components
+	if len(result.Components) != 2 {
+		t.Errorf("expected 2 components, got %d", len(result.Components))
+	}
+
+	// Verify components are cached
+	s.componentsMu.RLock()
+	cachedCount := len(s.components)
+	s.componentsMu.RUnlock()
+
+	if cachedCount != 2 {
+		t.Errorf("expected 2 cached components, got %d", cachedCount)
+	}
+}
+
+func TestServer_HandleGetComponents_Empty(t *testing.T) {
+	s := New()
+	req := httptest.NewRequest("GET", "/api/local/components", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var result DiscoveryResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	// No discovery run yet, should return empty
+	if len(result.Components) != 0 {
+		t.Errorf("expected 0 components, got %d", len(result.Components))
+	}
+
+	if !result.DiscoveredAt.IsZero() {
+		t.Error("expected zero discovery time for empty cache")
+	}
+}
+
+func TestServer_HandleGetComponents_AfterDiscover(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a Go file with a Chronicle annotation
+	goCode := `package testpkg
+
+// @chronicle:setup name="TestSetup" produces="data:Data"
+func TestSetup() {}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "setup.go"), []byte(goCode), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(WithDir(tmpDir))
+
+	// First, run discovery
+	req1 := httptest.NewRequest("POST", "/api/local/discover", nil)
+	w1 := httptest.NewRecorder()
+	s.mux.ServeHTTP(w1, req1)
+
+	if w1.Code != http.StatusOK {
+		t.Fatalf("discover failed: %d: %s", w1.Code, w1.Body.String())
+	}
+
+	var discoverResult DiscoveryResult
+	if err := json.NewDecoder(w1.Body).Decode(&discoverResult); err != nil {
+		t.Fatal(err)
+	}
+
+	// Now get components from cache
+	req2 := httptest.NewRequest("GET", "/api/local/components", nil)
+	w2 := httptest.NewRecorder()
+	s.mux.ServeHTTP(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w2.Code)
+	}
+
+	var componentsResult DiscoveryResult
+	if err := json.NewDecoder(w2.Body).Decode(&componentsResult); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should return cached components
+	if len(componentsResult.Components) != 1 {
+		t.Errorf("expected 1 component, got %d", len(componentsResult.Components))
+	}
+
+	// Discovery time should match
+	if !componentsResult.DiscoveredAt.Equal(discoverResult.DiscoveredAt) {
+		t.Error("discovery times should match")
+	}
+}
+
+func TestDiscoveredComponent_Fields(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a comprehensive Go file with all annotation fields
+	goCode := `package testpkg
+
+// @chronicle:task name="FullTask" requires="input:Input" produces="output:Output"
+// @chronicle:description "A fully annotated task"
+// @chronicle:tags critical, api
+func FullTask() {}
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "full.go"), []byte(goCode), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(WithDir(tmpDir))
+	req := httptest.NewRequest("POST", "/api/local/discover", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("discover failed: %d: %s", w.Code, w.Body.String())
+	}
+
+	var result DiscoveryResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(result.Components) != 1 {
+		t.Fatalf("expected 1 component, got %d", len(result.Components))
+	}
+
+	c := result.Components[0]
+
+	if c.Name != "FullTask" {
+		t.Errorf("expected name 'FullTask', got %q", c.Name)
+	}
+
+	if c.Type != "task" {
+		t.Errorf("expected type 'task', got %q", c.Type)
+	}
+
+	if c.Description != "A fully annotated task" {
+		t.Errorf("expected description 'A fully annotated task', got %q", c.Description)
+	}
+
+	if len(c.Tags) != 2 {
+		t.Errorf("expected 2 tags, got %d", len(c.Tags))
+	}
+
+	if len(c.Requires) != 1 || c.Requires[0] != "input:Input" {
+		t.Errorf("expected requires ['input:Input'], got %v", c.Requires)
+	}
+
+	if len(c.Produces) != 1 || c.Produces[0] != "output:Output" {
+		t.Errorf("expected produces ['output:Output'], got %v", c.Produces)
+	}
+
+	if c.SourceFile == "" {
+		t.Error("expected non-empty source file")
+	}
+}
