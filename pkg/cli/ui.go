@@ -55,6 +55,8 @@ Example:
 
 func runUI(port int, dir string, noBrowser bool, standaloneMode bool) error {
 	if standaloneMode {
+		// Standalone mode manages its own projects from ~/.chronicle/projects.json
+		// The dir parameter is intentionally not used in this mode
 		return runStandalone(port, noBrowser)
 	}
 
@@ -76,13 +78,8 @@ func runUI(port int, dir string, noBrowser bool, standaloneMode bool) error {
 	defer cancel()
 
 	// Handle signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		fmt.Println("\nShutting down...")
-		cancel()
-	}()
+	cleanup := setupSignalHandler(cancel)
+	defer cleanup()
 
 	url := fmt.Sprintf("http://localhost:%d", port)
 	fmt.Printf("Chronicle UI available at %s\n", url)
@@ -91,7 +88,9 @@ func runUI(port int, dir string, noBrowser bool, standaloneMode bool) error {
 
 	// Open browser
 	if !noBrowser {
-		go openBrowser(url)
+		if err := openBrowser(url); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		}
 	}
 
 	if err := server.Start(ctx); err != nil {
@@ -111,13 +110,8 @@ func runStandalone(port int, noBrowser bool) error {
 	defer cancel()
 
 	// Handle signals
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		fmt.Println("\nShutting down...")
-		cancel()
-	}()
+	cleanup := setupSignalHandler(cancel)
+	defer cleanup()
 
 	url := fmt.Sprintf("http://localhost:%d", port)
 	fmt.Printf("Chronicle Control Center available at %s\n", url)
@@ -125,7 +119,9 @@ func runStandalone(port int, noBrowser bool) error {
 
 	// Open browser
 	if !noBrowser {
-		go openBrowser(url)
+		if err := openBrowser(url); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		}
 	}
 
 	if err := server.Start(ctx); err != nil {
@@ -135,7 +131,22 @@ func runStandalone(port int, noBrowser bool) error {
 	return nil
 }
 
-func openBrowser(url string) {
+// setupSignalHandler sets up signal handling for graceful shutdown.
+// Returns a cleanup function that must be called to stop signal notifications.
+func setupSignalHandler(cancel context.CancelFunc) func() {
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nShutting down...")
+		cancel()
+	}()
+	return func() { signal.Stop(sigCh) }
+}
+
+// openBrowser attempts to open the given URL in the default browser.
+// Returns an error if the browser cannot be opened.
+func openBrowser(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
@@ -145,7 +156,10 @@ func openBrowser(url string) {
 	case "windows":
 		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
 	default:
-		return
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
-	_ = cmd.Start()
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to open browser: %w", err)
+	}
+	return nil
 }
