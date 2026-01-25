@@ -110,6 +110,20 @@ type ReconfigurableProvider interface {
 	Reconfigure(ctx context.Context, config map[string]any) error
 }
 
+// NetworkAwareProvider extends Provider with Docker network awareness.
+// Providers implementing this interface will be connected to the shared
+// Chronicle network, enabling container-to-container communication by name.
+type NetworkAwareProvider interface {
+	Provider
+
+	// SetNetwork configures the Docker network for the provider to join.
+	// Called by Manager before Start() if a shared network is configured.
+	SetNetwork(networkName string)
+
+	// Network returns the currently configured network name.
+	Network() string
+}
+
 // ReuseBehavior defines how infrastructure is managed between test executions.
 type ReuseBehavior int
 
