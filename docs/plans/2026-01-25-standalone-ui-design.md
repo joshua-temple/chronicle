@@ -1,219 +1,378 @@
 # Chronicle Standalone UI Design
 
-> Local web interface for editing Chronicle configuration and building scenarios.
+> Multi-project control center for Chronicle test framework.
 
 ## Overview
 
-The `chronicle ui` command launches a local HTTP server that serves the React SPA with file system APIs for editing `chronicle.yaml` and building scenarios visually.
+Extend Chronicle's UI to support a standalone "control center" mode that manages multiple projects, detects running daemon instances, and can launch the framework on demand.
+
+**Goals:**
+- Developer workstation: Switch between multiple local projects seamlessly
+- Team dashboard: Central visibility into test status across projects
+- Zero friction: Auto-discover projects, remember preferences, one-click launch
+
+**Non-goals:**
+- Network discovery (mDNS) - too fragile, platform-dependent
+- Electron/native app - adds distribution complexity
+- Result caching - better fetched fresh from daemon
+
+---
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  chronicle ui                        │
-├─────────────────────────────────────────────────────┤
-│  /api/local/config     → Read/write chronicle.yaml  │
-│  /api/local/discover   → Run component discovery    │
-│  /api/local/validate   → Validate configuration     │
-│  /api/local/project    → Project info               │
-│  /*                    → Static files (React SPA)   │
-└─────────────────────────────────────────────────────┘
-```
+### Deployment Model
 
-### Modes
-
-The React app operates in two modes:
-
-| Mode | Command | Features |
-|------|---------|----------|
-| **Standalone** | `chronicle ui` | Config editor, scenario builder, component browser |
-| **Daemon** | `chronicle daemon` | Dashboard, runs, results, monitoring |
-
-Mode is detected at startup by checking which API endpoints respond.
-
-## CLI Command
+Single binary, two modes via subcommand:
 
 ```bash
-chronicle ui [flags]
-
-Flags:
-  --port int       Port to serve on (default 3000)
-  --dir string     Project directory (default ".")
-  --no-browser     Don't open browser automatically
+chronicle ui              # Single-project mode (current behavior)
+chronicle ui --standalone # Multi-project control center
 ```
 
-## Local API Endpoints
+The React SPA detects mode via `/api/standalone/mode` endpoint and renders accordingly.
 
-### Configuration
+### Component Diagram
 
-**GET /api/local/config**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Chronicle Standalone UI                       │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐              │
+│  │   Project   │  │   Daemon    │  │   Process   │              │
+│  │  Registry   │  │  Connector  │  │  Launcher   │              │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘              │
+│         │                │                │                      │
+│         ▼                ▼                ▼                      │
+│  ~/.chronicle/     Health checks    spawn chronicle              │
+│  projects.json     + SSE streams    daemon processes             │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+           ┌───────────────┼───────────────┐
+           ▼               ▼               ▼
+    ┌────────────┐  ┌────────────┐  ┌────────────┐
+    │  Project A │  │  Project B │  │  Project C │
+    │  (local)   │  │  (local)   │  │  (remote)  │
+    │  :8080     │  │  stopped   │  │  :9090     │
+    └────────────┘  └────────────┘  └────────────┘
+```
 
-Returns the parsed `chronicle.yaml` as JSON.
+---
+
+## Project Registry
+
+### Storage Location
+
+```
+~/.chronicle/projects.json
+```
+
+### Schema
 
 ```json
 {
-  "version": "1",
-  "scenarios": [...],
-  "infrastructure": {...},
-  "chaos": {...},
-  "mocks": {...}
-}
-```
-
-**PUT /api/local/config**
-
-Accepts JSON, writes back to `chronicle.yaml`. Validates before saving.
-
-Request body: Same structure as GET response.
-
-Response: `200 OK` or `400 Bad Request` with validation errors.
-
-**POST /api/local/config/validate**
-
-Validates config without saving.
-
-Request body: Same structure as config.
-
-Response:
-```json
-{
-  "valid": true,
-  "errors": [],
-  "warnings": ["scenario 'test' has no teardown"]
-}
-```
-
-### Discovery
-
-**POST /api/local/discover**
-
-Runs component discovery on the project directory.
-
-Response:
-```json
-{
-  "components": [
+  "version": 1,
+  "projects": [
     {
-      "name": "CreateUser",
-      "type": "setup",
-      "description": "Creates a test user",
-      "tags": ["user", "setup"],
-      "produces": ["user"],
-      "requires": [],
-      "source_file": "components/user.go"
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "my-service",
+      "path": "/Users/josh/code/my-service",
+      "remoteUrl": null,
+      "addedAt": "2026-01-20T08:00:00Z",
+      "lastOpened": "2026-01-25T10:30:00Z",
+      "lastScenarios": ["smoke-test", "full-integration"],
+      "preferences": {
+        "defaultTab": "scenarios",
+        "scenarioFilter": "tag:critical"
+      }
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "name": "team-dashboard",
+      "path": null,
+      "remoteUrl": "https://chronicle.internal.company.com:8080",
+      "addedAt": "2026-01-22T14:00:00Z",
+      "lastOpened": "2026-01-24T16:45:00Z",
+      "lastScenarios": [],
+      "preferences": {}
     }
   ],
-  "discovered_at": "2026-01-25T10:30:00Z"
-}
-```
-
-**GET /api/local/components**
-
-Returns cached discovery results from last scan.
-
-### Project
-
-**GET /api/local/project**
-
-Returns project information.
-
-```json
-{
-  "directory": "/path/to/project",
-  "config_file": "chronicle.yaml",
-  "config_exists": true,
-  "last_modified": "2026-01-25T10:00:00Z"
-}
-```
-
-## Frontend Pages
-
-### Config Editor (`/config`)
-
-Tabbed interface for editing `chronicle.yaml`:
-
-- **General**: Version, global settings
-- **Scenarios**: List of scenarios with inline editing
-- **Infrastructure**: Provider configuration
-- **Chaos**: Chaos profile definitions
-- **Mocks**: Mock profile definitions
-
-Features:
-- Form-based editing (no raw YAML)
-- Real-time validation
-- Save with confirmation
-- "View YAML" preview toggle
-
-### Scenario Builder (`/scenarios/:name/edit`)
-
-Visual editor for individual scenarios:
-
-- **Metadata**: Name, description, tags, timeout, parallel count
-- **Flow Editor**: Ordered list of steps
-  - Add step from component picker
-  - Remove/reorder steps
-  - Configure step options (timeout, condition)
-- **Flow Preview**: Read-only graph visualization
-
-The component picker shows discovered components filtered by type.
-
-### Components Browser (`/components`)
-
-Reuses existing Components page with additions:
-- "Refresh" button to re-run discovery
-- Shows discovery timestamp
-- Loading state during scan
-
-## Mode Detection
-
-On app load:
-
-```typescript
-async function detectMode(): Promise<'standalone' | 'daemon' | 'disconnected'> {
-  try {
-    await fetch('/api/local/project')
-    return 'standalone'
-  } catch {
-    try {
-      await fetch('/api/v1/health')
-      return 'daemon'
-    } catch {
-      return 'disconnected'
-    }
+  "settings": {
+    "autoDiscover": true,
+    "pollIntervalMs": 30000,
+    "activePollIntervalMs": 5000
   }
 }
 ```
 
-The app renders different navigation and routes based on mode.
+### Auto-Discovery
 
-## Implementation
+When `autoDiscover` is enabled, scan for Chronicle projects on startup:
 
-### Go Backend
+1. Check current directory for `chronicle.yaml`
+2. Check recent git repositories (parse `~/.gitconfig` or shell history)
+3. Check common development paths (`~/code/**/chronicle.yaml`, `~/projects/**/chronicle.yaml`)
 
-| File | Purpose |
-|------|---------|
-| `pkg/cli/ui.go` | CLI command definition |
-| `pkg/ui/server.go` | HTTP server setup |
-| `pkg/ui/handlers.go` | API endpoint handlers |
-| `pkg/ui/config.go` | Config read/write with YAML preservation |
+Auto-discovered projects are added to registry with `autoDiscovered: true` flag. Users can pin or remove them.
 
-### Frontend
+---
 
-| File | Purpose |
-|------|---------|
-| `web/src/api/local.ts` | Local API client functions |
-| `web/src/hooks/useLocalConfig.ts` | Config state with React Query |
-| `web/src/hooks/useLocalDiscover.ts` | Discovery state |
-| `web/src/stores/mode.ts` | Mode detection Zustand store |
-| `web/src/pages/ConfigEditor.tsx` | Main config editor page |
-| `web/src/pages/ScenarioEditor.tsx` | Scenario builder page |
-| `web/src/components/config/*.tsx` | Config section editors |
-| `web/src/components/scenarios/FlowEditor.tsx` | Flow step list editor |
-| `web/src/components/scenarios/FlowPreview.tsx` | Graph visualization |
+## Daemon Status Detection
 
-## Future Enhancements
+### Health Check Strategy
 
-- **Visual drag-and-drop builder**: Full canvas-based scenario editor
-- **Multi-file support**: Edit scenarios in separate YAML files
-- **Live preview**: See changes reflected in real-time
-- **Undo/redo**: Edit history with keyboard shortcuts
+**Smart polling** with three tiers:
+
+| Context | Interval | Method |
+|---------|----------|--------|
+| Active project | 5s | SSE stream (push) |
+| Background projects | 30s | HTTP GET /health |
+| Inactive (tab hidden) | 60s | HTTP GET /health |
+
+### Status States
+
+```typescript
+type DaemonStatus =
+  | { state: 'unknown' }           // Never checked
+  | { state: 'stopped' }           // Health check failed
+  | { state: 'starting' }          // Launch initiated, waiting
+  | { state: 'running', port: number, version: string }
+  | { state: 'unhealthy', error: string }
+```
+
+### Health Endpoint
+
+Daemon exposes `/health` returning:
+
+```json
+{
+  "status": "healthy",
+  "version": "0.1.0",
+  "uptime": "2h34m",
+  "scenarios": 12,
+  "lastRun": "2026-01-25T10:15:00Z"
+}
+```
+
+---
+
+## Process Launcher
+
+### Launch Flow
+
+When user clicks "Launch" on a stopped project:
+
+1. **Validate** - Check project path exists, `chronicle.yaml` present
+2. **Find port** - Use configured port or find available one
+3. **Spawn** - Execute `chronicle daemon --port <port>` in project directory
+4. **Monitor** - Poll `/health` until responsive (timeout: 30s)
+5. **Connect** - Establish SSE stream, update status to "running"
+
+### Implementation
+
+```go
+type Launcher struct {
+    processes map[string]*exec.Cmd  // projectID -> process
+    mu        sync.RWMutex
+}
+
+func (l *Launcher) Launch(ctx context.Context, project Project) error {
+    cmd := exec.CommandContext(ctx, "chronicle", "daemon", "--port", port)
+    cmd.Dir = project.Path
+    cmd.Stdout = // capture for logs
+    cmd.Stderr = // capture for logs
+
+    if err := cmd.Start(); err != nil {
+        return fmt.Errorf("failed to start daemon: %w", err)
+    }
+
+    l.processes[project.ID] = cmd
+
+    // Wait for health
+    return l.waitForHealth(ctx, project, 30*time.Second)
+}
+
+func (l *Launcher) Stop(ctx context.Context, projectID string) error {
+    cmd, ok := l.processes[projectID]
+    if !ok {
+        return nil
+    }
+
+    // Graceful shutdown via signal
+    cmd.Process.Signal(os.Interrupt)
+
+    // Wait with timeout
+    done := make(chan error)
+    go func() { done <- cmd.Wait() }()
+
+    select {
+    case <-time.After(10 * time.Second):
+        cmd.Process.Kill()
+    case <-done:
+    }
+
+    delete(l.processes, projectID)
+    return nil
+}
+```
+
+---
+
+## UI Design
+
+### Project Selector View
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Chronicle Control Center                      [+ Add Project] │
+├─────────────────────────────────────────────────────────────┤
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │ ● my-service                    Running on :8080         │ │
+│  │   /Users/josh/code/my-service   Last run: 2 min ago      │ │
+│  │                                           [Open] [Stop]  │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │ ○ payment-api                   Stopped                  │ │
+│  │   /Users/josh/code/payment-api  Last run: 3 days ago     │ │
+│  │                                         [Open] [Launch]  │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │ ● team-dashboard                Running (remote)         │ │
+│  │   https://chronicle.internal    12 scenarios             │ │
+│  │                                                  [Open]  │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                                                               │
+│  ─────────────────────────────────────────────────────────── │
+│  Recently discovered:                                         │
+│  ○ user-service  /Users/josh/code/user-svc     [Add] [Ignore] │
+│                                                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Project Detail View
+
+Once a project is opened, show the existing Chronicle UI (scenarios, runs, components, config) with a "← Back to Projects" link.
+
+### Add Project Modal
+
+```
+┌────────────────────────────────────────┐
+│  Add Project                       [X] │
+├────────────────────────────────────────┤
+│                                        │
+│  ○ Local project                       │
+│    Path: [________________________] 📁 │
+│                                        │
+│  ○ Remote daemon                       │
+│    URL:  [________________________]    │
+│                                        │
+│  Name: [________________________]      │
+│        (auto-detected from config)     │
+│                                        │
+│              [Cancel]  [Add Project]   │
+└────────────────────────────────────────┘
+```
+
+---
+
+## API Endpoints
+
+### New Endpoints (Standalone Mode)
+
+```
+GET  /api/standalone/mode          # Returns { mode: "standalone" | "single" }
+GET  /api/standalone/projects      # List all registered projects with status
+POST /api/standalone/projects      # Add a project
+DELETE /api/standalone/projects/:id # Remove a project
+PUT  /api/standalone/projects/:id  # Update project preferences
+
+POST /api/standalone/projects/:id/launch  # Start daemon for project
+POST /api/standalone/projects/:id/stop    # Stop daemon for project
+GET  /api/standalone/projects/:id/health  # Check specific project health
+
+GET  /api/standalone/discover      # Trigger auto-discovery scan
+```
+
+### Response Examples
+
+```json
+// GET /api/standalone/projects
+{
+  "projects": [
+    {
+      "id": "...",
+      "name": "my-service",
+      "path": "/Users/josh/code/my-service",
+      "status": {
+        "state": "running",
+        "port": 8080,
+        "version": "0.1.0"
+      },
+      "lastOpened": "2026-01-25T10:30:00Z"
+    }
+  ]
+}
+
+// POST /api/standalone/projects/:id/launch
+{
+  "success": true,
+  "port": 8081,
+  "pid": 12345
+}
+```
+
+---
+
+## Implementation Plan
+
+### Phase 1: Core Infrastructure
+1. Create `pkg/ui/standalone/` package
+2. Implement ProjectRegistry with file persistence
+3. Add `--standalone` flag to `chronicle ui` command
+4. Create `/api/standalone/*` endpoints
+
+### Phase 2: Daemon Management
+5. Implement health checker with smart polling
+6. Implement process launcher
+7. Add SSE forwarding for active project
+
+### Phase 3: React UI
+8. Create ProjectSelector component
+9. Add mode detection to App.tsx
+10. Implement project cards with status indicators
+11. Add/remove project modals
+
+### Phase 4: Auto-Discovery
+12. Implement directory scanner
+13. Git history integration (optional)
+14. "Recently discovered" UI section
+
+### Phase 5: Polish
+15. Keyboard shortcuts (Cmd+1/2/3 for projects)
+16. Preferences persistence
+17. Error handling and edge cases
+
+---
+
+## Open Questions (Decided)
+
+| Question | Decision |
+|----------|----------|
+| Separate repo? | No - same repo, standalone artifact |
+| Discovery method? | Auto-discover local + manual remote |
+| Polling strategy? | Smart polling (active=5s, background=30s) |
+| Memory scope? | Moderate (projects + last scenarios + preferences) |
+| Packaging? | Subcommand: `chronicle ui --standalone` |
+
+---
+
+## Success Criteria
+
+1. User can add local and remote projects
+2. Projects show live status (running/stopped)
+3. One-click launch starts daemon and connects
+4. Switching projects preserves context (last scenarios, filters)
+5. Auto-discovery finds Chronicle projects without manual setup
+6. Works for both individual developers and team dashboards
