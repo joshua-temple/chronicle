@@ -8,33 +8,66 @@ interface ModeState {
   detectMode: () => Promise<void>
 }
 
+// Cache detected mode to avoid repeated fetches
+let cachedMode: AppMode | null = null
+// Flag to prevent concurrent detection calls
+let isDetecting = false
+
 export const useModeStore = create<ModeState>((set) => ({
-  mode: 'detecting',
+  mode: cachedMode ?? 'detecting',
   setMode: (mode) => set({ mode }),
   detectMode: async () => {
-    // Try standalone API first (local UI server)
-    try {
-      const res = await fetch('/api/local/project')
-      if (res.ok) {
-        set({ mode: 'standalone' })
-        return
-      }
-    } catch {
-      // Not standalone mode
+    // Return cached mode if already detected
+    if (cachedMode !== null) {
+      set({ mode: cachedMode })
+      return
     }
 
-    // Try daemon API
-    try {
-      const res = await fetch('/api/v1/health')
-      if (res.ok) {
-        set({ mode: 'daemon' })
-        return
-      }
-    } catch {
-      // Not daemon mode
+    // Prevent concurrent detection calls
+    if (isDetecting) {
+      return
     }
 
-    set({ mode: 'disconnected' })
+    isDetecting = true
+
+    try {
+      // Try standalone API first (local UI server)
+      // The /api/standalone/mode endpoint returns {"mode": "standalone"} in standalone mode
+      try {
+        const res = await fetch('/api/standalone/mode')
+        if (res.ok) {
+          try {
+            const data = await res.json()
+            if (data?.mode === 'standalone') {
+              cachedMode = 'standalone'
+              set({ mode: 'standalone' })
+              return
+            }
+          } catch {
+            // Failed to parse JSON, fall through to daemon check
+          }
+        }
+      } catch {
+        // Network error, fall through to daemon check
+      }
+
+      // Try daemon API
+      try {
+        const res = await fetch('/api/v1/health')
+        if (res.ok) {
+          cachedMode = 'daemon'
+          set({ mode: 'daemon' })
+          return
+        }
+      } catch {
+        // Not daemon mode
+      }
+
+      cachedMode = 'disconnected'
+      set({ mode: 'disconnected' })
+    } finally {
+      isDetecting = false
+    }
   },
 }))
 
