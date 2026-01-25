@@ -59,5 +59,12 @@ Thumbs.db
 # Temporary files created by editors
 *.swp
 
-.claude/# Chronicle binary
+.claude/
+
+# Chronicle binary
 chronicle
+bin/
+
+# Web build artifacts
+web/dist/
+web/node_modules/

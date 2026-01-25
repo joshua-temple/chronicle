@@ -106,9 +106,20 @@ func TestDevModeHandler_ReturnsHTML(t *testing.T) {
 	}
 }
 
-func TestWebFS_DefaultsToNil(t *testing.T) {
-	// WebFS should be nil by default when no embed is set
-	if WebFS != nil {
-		t.Error("expected WebFS to be nil by default")
+func TestWebFS_InitializedWhenDistExists(t *testing.T) {
+	// WebFS should be initialized from embedded files when web/dist exists.
+	// The init() function in static.go extracts the "dist" subdirectory from web.WebFS.
+	// If the dist directory exists (i.e., web frontend was built), WebFS will be non-nil.
+	// If dist doesn't exist, WebFS will be nil and devModeHandler is used instead.
+	//
+	// This test verifies the current state - when dist exists, WebFS should be set.
+	if WebFS == nil {
+		t.Skip("WebFS is nil - web/dist may not be built (run 'make web-build')")
+	}
+
+	// Verify we can read files from the embedded FS
+	_, err := WebFS.Open("index.html")
+	if err != nil {
+		t.Errorf("expected to find index.html in embedded FS: %v", err)
 	}
 }

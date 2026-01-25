@@ -4,11 +4,25 @@ import (
 	"io/fs"
 	"net/http"
 	"strings"
+
+	"github.com/joshua-temple/chronicle/web"
 )
 
-// WebFS is set externally when the web UI is embedded.
-// See cmd/chronicle/embed.go for the actual embed directive.
+// WebFS holds the embedded web UI files.
+// It's initialized from web.WebFS with the "dist" subdirectory extracted.
 var WebFS fs.FS
+
+func init() {
+	// Extract the dist subdirectory from the embedded FS.
+	// The web.WebFS embeds files as "dist/*", so we need fs.Sub to serve them at root.
+	subFS, err := fs.Sub(web.WebFS, "dist")
+	if err != nil {
+		// If dist doesn't exist (e.g., not built yet), leave WebFS nil
+		// and devModeHandler will be used instead.
+		return
+	}
+	WebFS = subFS
+}
 
 // spaHandler wraps a file server to handle SPA routing.
 // For any path that doesn't match a real file, it serves index.html.
