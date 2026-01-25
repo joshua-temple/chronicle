@@ -59,6 +59,7 @@ func init() {
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(reportCmd)
 	rootCmd.AddCommand(daemonCmd)
+	rootCmd.AddCommand(NewUICmd())
 }
 
 func initConfig() {

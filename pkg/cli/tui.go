@@ -12,7 +12,7 @@ import (
 )
 
 var tuiCmd = &cobra.Command{
-	Use:   "ui",
+	Use:   "tui",
 	Short: "Launch interactive terminal UI",
 	Long: `Launch the Chronicle interactive terminal user interface.
 
