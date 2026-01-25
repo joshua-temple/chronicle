@@ -16,11 +16,12 @@ export function Sidebar() {
       <div className="flex h-16 items-center border-b border-border px-6">
         <span className="text-xl font-bold text-primary">Chronicle</span>
       </div>
-      <nav className="space-y-1 p-4">
+      <nav aria-label="Main navigation" className="space-y-1 p-4">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
+            end={item.to === '/'}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',

@@ -25,7 +25,7 @@ export function Header() {
         <Badge variant={health?.status === 'healthy' ? 'success' : 'destructive'}>
           {isLoading ? 'Checking...' : health?.status || 'Unknown'}
         </Badge>
-        <Button variant="ghost" size="icon" onClick={() => refetch()}>
+        <Button variant="ghost" size="icon" onClick={() => refetch()} aria-label="Refresh health status">
           <RefreshCw className="h-4 w-4" />
         </Button>
       </div>
