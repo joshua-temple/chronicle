@@ -10,31 +10,41 @@ import (
 	"sync"
 )
 
+// ManagerOption configures Manager behavior.
+type ManagerOption func(*Manager)
+
 // Manager coordinates multiple infrastructure providers.
 type Manager struct {
-	mu        sync.RWMutex
-	providers map[string]Provider
-	configs   map[string]ProviderConfig
-	registry  *Registry
-	endpoints *EndpointRegistry
-	reuse     ReuseBehavior
-	isolation IsolationLevel
-	started   bool
+	mu             sync.RWMutex
+	providers      map[string]Provider
+	configs        map[string]ProviderConfig
+	registry       *Registry
+	endpoints      *EndpointRegistry
+	reuse          ReuseBehavior
+	isolation      IsolationLevel
+	started        bool
+	networkEnabled bool
+	networkName    string
 }
 
 // NewManager creates a new infrastructure manager.
-func NewManager(registry *Registry) *Manager {
+func NewManager(registry *Registry, opts ...ManagerOption) *Manager {
 	if registry == nil {
 		registry = DefaultRegistry
 	}
-	return &Manager{
-		providers: make(map[string]Provider),
-		configs:   make(map[string]ProviderConfig),
-		registry:  registry,
-		endpoints: NewEndpointRegistry(),
-		reuse:     ReuseWithFlush,
-		isolation: DataIsolation,
+	m := &Manager{
+		providers:      make(map[string]Provider),
+		configs:        make(map[string]ProviderConfig),
+		registry:       registry,
+		endpoints:      NewEndpointRegistry(),
+		reuse:          ReuseWithFlush,
+		isolation:      DataIsolation,
+		networkEnabled: false,
 	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
 }
 
 // SetDefaultReuse sets the default reuse behavior for all providers.
@@ -341,4 +351,25 @@ func (m *Manager) SetEnvVars() error {
 		return errors.Join(errs...)
 	}
 	return nil
+}
+
+// WithNetworkEnabled enables or disables shared Docker networking.
+func WithNetworkEnabled(enabled bool) ManagerOption {
+	return func(m *Manager) {
+		m.networkEnabled = enabled
+	}
+}
+
+// NetworkName returns the Docker network name, or empty if not started/enabled.
+func (m *Manager) NetworkName() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.networkName
+}
+
+// IsNetworkEnabled returns whether shared networking is enabled.
+func (m *Manager) IsNetworkEnabled() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.networkEnabled
 }
