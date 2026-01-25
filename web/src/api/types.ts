@@ -32,10 +32,13 @@ export interface Run {
 
 export interface Component {
   name: string
-  type: string
-  source_file: string
-  dependencies?: string[]
+  type: 'setup' | 'task' | 'validation' | 'teardown'
+  description?: string
   tags?: string[]
+  produces?: string[]
+  requires?: string[]
+  source_file: string
+  scenarios?: string[]
 }
 
 export interface RunResult {

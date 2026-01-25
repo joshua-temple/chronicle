@@ -3,13 +3,10 @@ import { Layout } from '@/components/layout/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Scenarios } from '@/pages/Scenarios'
 import { Results } from '@/pages/Results'
+import { Components } from '@/pages/Components'
 
 function Runs() {
   return <div className="text-2xl font-bold">Runs</div>
-}
-
-function Components() {
-  return <div className="text-2xl font-bold">Components</div>
 }
 
 export default function App() {
