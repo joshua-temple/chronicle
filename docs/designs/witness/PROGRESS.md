@@ -6,11 +6,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | 5 (Results & Reporting) |
-| **Current Step** | 5.1 |
-| **Status** | pending |
+| **Current Phase** | 6 (Chaos & Mocks) |
+| **Current Step** | 6.1 |
+| **Status** | in_progress |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | (pending 4.4 commit) |
+| **Last Commit** | (pending Phase 5 commit) |
 
 ## Phase Checklist
 
@@ -47,10 +47,10 @@
 - [x] 4.4 Runner Integration (`pkg/execution/runner.go`) - commit: (pending)
 
 ### Phase 5: Results & Reporting
-- [ ] 5.1 Results Model
-- [ ] 5.2 Narrative
-- [ ] 5.3 Storage Adapters
-- [ ] 5.4 Report Formats
+- [x] 5.1 Results Model (`pkg/results/results.go`) - commit: (pending)
+- [x] 5.2 Narrative (`pkg/results/narrative.go`) - commit: (pending)
+- [x] 5.3 Storage Adapters (`pkg/results/storage.go`) - commit: (pending)
+- [x] 5.4 Report Formats (`pkg/results/reports.go`) - commit: (pending)
 
 ### Phase 6: Chaos & Mocks
 - [ ] 6.1 Chaos Profiles
@@ -82,7 +82,7 @@ None.
 
 ## Next Action
 
-**Start Phase 5.1:** Implement results model (`pkg/results/`)
+**Start Phase 6.1:** Implement chaos profiles (`pkg/chaos/`)
 
 ## Commit Log
 
