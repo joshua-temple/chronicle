@@ -6,11 +6,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | 3 (Infrastructure) |
-| **Current Step** | 3.5 |
-| **Status** | in_progress |
+| **Current Phase** | 4 (Execution Engine) |
+| **Current Step** | 4.1 |
+| **Status** | pending |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | bd2f626 |
+| **Last Commit** | 1cbf578 |
 
 ## Phase Checklist
 
@@ -37,8 +37,8 @@
 - [x] 3.1 Provider Interface (`pkg/infrastructure/provider.go`) - commit: 5ae0cfb
 - [x] 3.2 TestContainers Provider - commit: 48fd7ae
 - [x] 3.3 Secret Management (`pkg/config/secrets.go`) - commit: bd2f626
-- [x] 3.4 Reuse Behavior (`pkg/infrastructure/reuse.go`) - commit: pending
-- [ ] 3.5 Infrastructure Example
+- [x] 3.4 Reuse Behavior (`pkg/infrastructure/reuse.go`) - commit: 1cbf578
+- [x] 3.5 Infrastructure Example (`examples/infrastructure/`) - commit: pending
 
 ### Phase 4: Execution Engine
 - [ ] 4.1 Executor (`pkg/execution/executor.go`)
@@ -82,7 +82,7 @@ None.
 
 ## Next Action
 
-**Start Phase 3.5:** Create infrastructure example demonstrating providers, reuse, and secrets
+**Start Phase 4.1:** Implement executor (`pkg/execution/executor.go`)
 
 ## Commit Log
 
@@ -102,6 +102,7 @@ None.
 | 3 | 3.1 | 5ae0cfb | Implement provider interface and manager |
 | 3 | 3.2 | 48fd7ae | Add TestContainers provider implementation |
 | 3 | 3.3 | bd2f626 | Add secret management and variable resolution |
+| 3 | 3.4 | 1cbf578 | Add reuse manager for TTL-based container caching |
 
 ## Context Restoration Notes
 
