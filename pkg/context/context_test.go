@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/joshua-temple/chronicle/pkg/core"
+	"github.com/joshua-temple/chronicle/pkg/infrastructure"
 )
 
 func TestLogLevel(t *testing.T) {
@@ -489,6 +490,65 @@ func TestContextWithPointers(t *testing.T) {
 		retrieved := Get[User](ctx, "user")
 		if retrieved.ID != "456" || retrieved.Email != "other@example.com" {
 			t.Error("retrieved user should match original")
+		}
+	})
+}
+
+func TestContext_Endpoint(t *testing.T) {
+	t.Run("returns endpoint from registry", func(t *testing.T) {
+		registry := infrastructure.NewEndpointRegistry()
+		registry.Register("postgres", infrastructure.Endpoint{
+			Host: "localhost",
+			Port: 5432,
+		})
+
+		ctx := New(context.Background(), WithEndpointRegistry(registry))
+
+		ep, ok := ctx.Endpoint("postgres")
+		if !ok {
+			t.Fatal("Endpoint() returned false, want true")
+		}
+
+		if ep.Port != 5432 {
+			t.Errorf("Endpoint().Port = %d, want 5432", ep.Port)
+		}
+	})
+
+	t.Run("returns false for nonexistent endpoint", func(t *testing.T) {
+		ctx := New(context.Background())
+
+		_, ok := ctx.Endpoint("nonexistent")
+		if ok {
+			t.Error("Endpoint() returned true for nonexistent, want false")
+		}
+	})
+
+	t.Run("returns false when no registry configured", func(t *testing.T) {
+		ctx := New(context.Background())
+
+		_, ok := ctx.Endpoint("postgres")
+		if ok {
+			t.Error("Endpoint() returned true when no registry configured, want false")
+		}
+	})
+
+	t.Run("checks parent context when no local registry", func(t *testing.T) {
+		registry := infrastructure.NewEndpointRegistry()
+		registry.Register("redis", infrastructure.Endpoint{
+			Host: "localhost",
+			Port: 6379,
+		})
+
+		parent := New(context.Background(), WithEndpointRegistry(registry))
+		child := parent.Child("worker")
+
+		ep, ok := child.Endpoint("redis")
+		if !ok {
+			t.Fatal("child should inherit endpoint registry from parent")
+		}
+
+		if ep.Port != 6379 {
+			t.Errorf("Endpoint().Port = %d, want 6379", ep.Port)
 		}
 	})
 }

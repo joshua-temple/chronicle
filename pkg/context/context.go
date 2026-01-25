@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/joshua-temple/chronicle/pkg/core"
+	"github.com/joshua-temple/chronicle/pkg/infrastructure"
 )
 
 // LogLevel represents the severity of a log message.
@@ -91,6 +92,9 @@ type Context interface {
 	// Infrastructure clients
 	Client(name string) (any, error)
 
+	// Endpoint returns infrastructure endpoint info by name.
+	Endpoint(name string) (infrastructure.Endpoint, bool)
+
 	// Flags and parameters
 	Flag(name string) any
 	Param(name string) any
@@ -125,19 +129,20 @@ type Context interface {
 type contextImpl struct {
 	context.Context
 
-	name       string
-	parent     *contextImpl
-	state      map[string]any
-	flags      map[string]any
-	params     map[string]any
-	clients    map[string]any
-	trace      *core.TraceContext
-	logs       []LogEntry
-	narrative  []NarrativeEntry
-	failure    error
-	partial    map[string]any
-	startTime  time.Time
-	sizeLimit  int
+	name             string
+	parent           *contextImpl
+	state            map[string]any
+	flags            map[string]any
+	params           map[string]any
+	clients          map[string]any
+	trace            *core.TraceContext
+	logs             []LogEntry
+	narrative        []NarrativeEntry
+	failure          error
+	partial          map[string]any
+	startTime        time.Time
+	sizeLimit        int
+	endpointRegistry *infrastructure.EndpointRegistry
 
 	// Client provider function (injected by execution engine)
 	clientProvider func(name string) (any, error)
@@ -181,6 +186,13 @@ func WithSizeLimit(limit int) ContextOption {
 func WithClientProvider(provider func(name string) (any, error)) ContextOption {
 	return func(c *contextImpl) {
 		c.clientProvider = provider
+	}
+}
+
+// WithEndpointRegistry sets the endpoint registry for infrastructure discovery.
+func WithEndpointRegistry(registry *infrastructure.EndpointRegistry) ContextOption {
+	return func(c *contextImpl) {
+		c.endpointRegistry = registry
 	}
 }
 
@@ -260,6 +272,17 @@ func (c *contextImpl) Client(name string) (any, error) {
 	return nil, fmt.Errorf("client not found: %s", name)
 }
 
+// Endpoint returns infrastructure endpoint info by name.
+func (c *contextImpl) Endpoint(name string) (infrastructure.Endpoint, bool) {
+	if c.endpointRegistry == nil {
+		if c.parent != nil {
+			return c.parent.Endpoint(name)
+		}
+		return infrastructure.Endpoint{}, false
+	}
+	return c.endpointRegistry.Get(name)
+}
+
 // Flag retrieves a flag value by name.
 func (c *contextImpl) Flag(name string) any {
 	if v, ok := c.flags[name]; ok {
@@ -302,20 +325,21 @@ func (c *contextImpl) Child(name string) Context {
 
 func (c *contextImpl) createChild(name string) *contextImpl {
 	child := &contextImpl{
-		Context:        c.Context,
-		name:           name,
-		parent:         c,
-		state:          make(map[string]any),
-		flags:          c.flags,    // Share flags
-		params:         c.params,   // Share params
-		clients:        c.clients,  // Share clients cache
-		trace:          c.trace,    // Will be overridden by WithSpan
-		logs:           c.logs,     // Share logs slice
-		narrative:      c.narrative,
-		partial:        c.partial,
-		startTime:      time.Now(),
-		sizeLimit:      c.sizeLimit,
-		clientProvider: c.clientProvider,
+		Context:          c.Context,
+		name:             name,
+		parent:           c,
+		state:            make(map[string]any),
+		flags:            c.flags,    // Share flags
+		params:           c.params,   // Share params
+		clients:          c.clients,  // Share clients cache
+		trace:            c.trace,    // Will be overridden by WithSpan
+		logs:             c.logs,     // Share logs slice
+		narrative:        c.narrative,
+		partial:          c.partial,
+		startTime:        time.Now(),
+		sizeLimit:        c.sizeLimit,
+		endpointRegistry: c.endpointRegistry,
+		clientProvider:   c.clientProvider,
 	}
 	return child
 }
