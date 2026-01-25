@@ -2,13 +2,10 @@ import { Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Scenarios } from '@/pages/Scenarios'
+import { Results } from '@/pages/Results'
 
 function Runs() {
   return <div className="text-2xl font-bold">Runs</div>
-}
-
-function Results() {
-  return <div className="text-2xl font-bold">Results</div>
 }
 
 function Components() {
