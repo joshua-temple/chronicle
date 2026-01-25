@@ -59,4 +59,5 @@ Thumbs.db
 # Temporary files created by editors
 *.swp
 
-.claude/
+.claude/# Chronicle binary
+chronicle

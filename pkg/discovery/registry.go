@@ -55,6 +55,12 @@ func (r *Registry) GetMiddleware(name string) (*MiddlewareInfo, bool) {
 	return m, ok
 }
 
+// HasComponent returns true if a component with the given name exists.
+func (r *Registry) HasComponent(name string) bool {
+	_, ok := r.Components[core.ComponentID(name)]
+	return ok
+}
+
 // ComponentsByType returns all components of a given type.
 func (r *Registry) ComponentsByType(ct core.ComponentType) []*core.Component {
 	var result []*core.Component

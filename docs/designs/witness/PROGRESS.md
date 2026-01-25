@@ -7,10 +7,10 @@
 | Field | Value |
 |-------|-------|
 | **Current Phase** | 7 (CLI) |
-| **Current Step** | 7.1 |
+| **Current Step** | 7.2 |
 | **Status** | in_progress |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | (pending Phase 6 commit) |
+| **Last Commit** | (pending - Phase 7.1 complete) |
 
 ## Phase Checklist
 
@@ -53,13 +53,13 @@
 - [x] 5.4 Report Formats (`pkg/results/reports.go`) - commit: fa6965e
 
 ### Phase 6: Chaos & Mocks
-- [x] 6.1 Chaos Profiles (`pkg/chaos/`) - commit: (pending)
-- [x] 6.2 Mock System (`pkg/mock/`) - commit: (pending)
+- [x] 6.1 Chaos Profiles (`pkg/chaos/`) - commit: b38b5aa
+- [x] 6.2 Mock System (`pkg/mock/`) - commit: b38b5aa
 - [x] 6.3 Examples (deferred to Phase 9)
 
 ### Phase 7: CLI
-- [ ] 7.1 Core Commands
-- [ ] 7.2 Graph Visualization
+- [x] 7.1 Core Commands (`cmd/chronicle/`, `pkg/cli/`) - commit: (pending)
+- [ ] 7.2 Graph Visualization (ASCII, DOT, Mermaid)
 
 ### Phase 8: Daemon & API
 - [ ] 8.1 API Server
@@ -82,7 +82,7 @@ None.
 
 ## Next Action
 
-**Start Phase 7.1:** Implement CLI core commands (`cmd/chronicle/`)
+**Complete Phase 7.2:** Polish graph visualization (already implemented in pkg/cli/graph.go)
 
 ## Commit Log
 
@@ -106,6 +106,8 @@ None.
 | 3 | 3.5 | a2bdf34 | Add infrastructure example demonstrating providers and reuse |
 | 4 | 4.1 | 7134aa2 | Implement scenario execution engine with parallel support |
 | 4 | 4.4 | (pending) | Add test runner integration with Go testing framework |
+| 5 | 5.1-5.4 | fa6965e | Implement results model, narrative, storage, and reports |
+| 6 | 6.1-6.2 | b38b5aa | Implement chaos engineering and mock system |
 
 ## Context Restoration Notes
 

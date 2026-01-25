@@ -258,6 +258,52 @@ type MockFallbackConfig struct {
 	Body   string `yaml:"body,omitempty"`
 }
 
+// GetComponentName returns the component name from the flow item.
+func (f FlowItemConfig) GetComponentName() string {
+	if f.Setup != "" {
+		return f.Setup
+	}
+	if f.Task != "" {
+		return f.Task
+	}
+	if f.Validation != "" {
+		return f.Validation
+	}
+	if f.Step != "" {
+		return f.Step
+	}
+	if f.Rollup != "" {
+		return f.Rollup
+	}
+	if f.Teardown != "" {
+		return f.Teardown
+	}
+	return ""
+}
+
+// GetComponentType returns the type of the flow item.
+func (f FlowItemConfig) GetComponentType() string {
+	if f.Setup != "" {
+		return "setup"
+	}
+	if f.Task != "" {
+		return "task"
+	}
+	if f.Validation != "" {
+		return "validation"
+	}
+	if f.Step != "" {
+		return "step"
+	}
+	if f.Rollup != "" {
+		return "rollup"
+	}
+	if f.Teardown != "" {
+		return "teardown"
+	}
+	return ""
+}
+
 // FlagsConfig configures test flags.
 type FlagsConfig struct {
 	Definitions map[string]FlagDefinition `yaml:"definitions,omitempty"`
