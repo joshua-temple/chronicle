@@ -319,7 +319,6 @@ var (
 	annotationTypeRe = regexp.MustCompile(`^@chronicle:(\w+)`)
 	attributeRe      = regexp.MustCompile(`(\w+)="([^"]*)"`)
 	simpleValueRe    = regexp.MustCompile(`^@chronicle:\w+\s+"([^"]+)"`)
-	tagListRe        = regexp.MustCompile(`^@chronicle:\w+\s+(.+)$`)
 )
 
 func (p *Parser) parseAnnotation(text, path string, line int) *Annotation {

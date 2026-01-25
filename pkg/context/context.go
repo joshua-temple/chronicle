@@ -137,7 +137,6 @@ type contextImpl struct {
 	partial    map[string]any
 	startTime  time.Time
 	sizeLimit  int
-	currentKey string
 
 	// Client provider function (injected by execution engine)
 	clientProvider func(name string) (any, error)

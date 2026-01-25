@@ -291,9 +291,18 @@ type BundlesConfig struct {
 
 // SecretsConfig configures secret management.
 type SecretsConfig struct {
-	Provider string            `yaml:"provider"`
-	Path     string            `yaml:"path,omitempty"`
-	Mapping  map[string]string `yaml:"mapping,omitempty"`
+	Provider      string            `yaml:"provider"`
+	Path          string            `yaml:"path,omitempty"`
+	Mapping       map[string]string `yaml:"mapping,omitempty"`
+	FallbackToEnv bool              `yaml:"fallback_to_env,omitempty"`
+	Vault         *VaultConfig      `yaml:"vault,omitempty"`
+}
+
+// VaultConfig configures HashiCorp Vault.
+type VaultConfig struct {
+	Address string `yaml:"address"`
+	Token   string `yaml:"token,omitempty"`
+	Path    string `yaml:"path,omitempty"`
 }
 
 // ExecutionConfig configures test execution.

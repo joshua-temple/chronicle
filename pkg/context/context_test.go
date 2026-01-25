@@ -284,7 +284,7 @@ func TestContextTracing(t *testing.T) {
 		ctx := New(context.Background())
 		tc := ctx.Trace()
 		if tc == nil {
-			t.Error("Trace should not return nil")
+			t.Fatal("Trace should not return nil")
 		}
 		if !tc.TraceID.IsValid() {
 			t.Error("Trace should have valid TraceID")

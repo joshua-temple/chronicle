@@ -190,7 +190,7 @@ func TestParserDiscovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a test file with annotations
 	testCode := `package testpkg
@@ -351,7 +351,7 @@ func TestParserSkipsTestFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Regular file
 	mainCode := `package testpkg
@@ -391,7 +391,7 @@ func TestParserSkipsVendor(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create vendor directory
 	vendorDir := filepath.Join(tmpDir, "vendor", "somepackage")

@@ -71,7 +71,7 @@ func TestChain(t *testing.T) {
 		wrapped := chain(runner)
 
 		ctx := newTestContext("test")
-		wrapped(ctx)
+		_ = wrapped(ctx)
 
 		if !called {
 			t.Error("runner should have been called")
@@ -136,7 +136,7 @@ func TestTracing(t *testing.T) {
 			return nil
 		})
 
-		runner(ctx)
+		_ = runner(ctx)
 
 		// Trace ID should be the same (span changes, not trace)
 		if childTraceID != originalTraceID.String() {
@@ -160,7 +160,7 @@ func TestMetrics(t *testing.T) {
 			return nil
 		})
 
-		runner(ctx)
+		_ = runner(ctx)
 
 		if len(collector.Executions) != 1 {
 			t.Fatalf("expected 1 execution record, got %d", len(collector.Executions))
@@ -181,7 +181,7 @@ func TestMetrics(t *testing.T) {
 			return errors.New("error")
 		})
 
-		runner(ctx)
+		_ = runner(ctx)
 
 		if len(collector.Executions) != 1 {
 			t.Fatalf("expected 1 execution record, got %d", len(collector.Executions))
@@ -434,7 +434,7 @@ func TestCondition(t *testing.T) {
 			return nil
 		})
 
-		runner(ctx)
+		_ = runner(ctx)
 		if !ran {
 			t.Error("runner should have been called")
 		}
@@ -474,7 +474,7 @@ func TestBeforeAfter(t *testing.T) {
 			return nil
 		})
 
-		runner(ctx)
+		_ = runner(ctx)
 
 		if len(order) != 2 || order[0] != "before" || order[1] != "handler" {
 			t.Errorf("wrong order: %v", order)
@@ -514,7 +514,7 @@ func TestBeforeAfter(t *testing.T) {
 			return nil
 		})
 
-		runner(ctx)
+		_ = runner(ctx)
 
 		if len(order) != 2 || order[0] != "handler" || order[1] != "after" {
 			t.Errorf("wrong order: %v", order)
@@ -551,7 +551,7 @@ func TestNoOpMiddleware(t *testing.T) {
 		return nil
 	})
 
-	runner(ctx)
+	_ = runner(ctx)
 	if !called {
 		t.Error("runner should have been called")
 	}

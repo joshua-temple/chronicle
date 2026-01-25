@@ -146,12 +146,9 @@ func (r *Registry) Validate() error {
 		}
 
 		// Check that types are registered (optional, just warnings)
+		// Types may come from external packages, so we don't error on unregistered types
 		for _, prod := range c.Produces {
-			if prod.Type != "" && !r.isBuiltinType(prod.Type) {
-				if _, ok := r.GetType(prod.Type); !ok {
-					// This is a warning, not an error - types may come from external packages
-				}
-			}
+			_ = prod // Explicit: type checking is intentionally a no-op for external types
 		}
 	}
 
@@ -178,17 +175,6 @@ func (r *Registry) canSatisfy(dep core.Dependency) bool {
 		}
 	}
 	return false
-}
-
-func (r *Registry) isBuiltinType(t string) bool {
-	builtins := map[string]bool{
-		"bool": true, "byte": true, "int": true, "int8": true, "int16": true,
-		"int32": true, "int64": true, "uint": true, "uint8": true, "uint16": true,
-		"uint32": true, "uint64": true, "float32": true, "float64": true,
-		"complex64": true, "complex128": true, "string": true, "error": true,
-		"any": true, "interface{}": true,
-	}
-	return builtins[t]
 }
 
 // Cycle represents a dependency cycle.
