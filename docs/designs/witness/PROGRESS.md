@@ -6,11 +6,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | 9 (Full Stack Example) |
-| **Current Step** | 9.1 |
-| **Status** | pending |
+| **Current Phase** | 10 (Documentation & Polish) |
+| **Current Step** | 10.1 |
+| **Status** | in_progress |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | 47fda69 |
+| **Last Commit** | 6ed5ec3 |
 
 ## Phase Checklist
 
@@ -68,7 +68,11 @@
 - [x] 8.4 Hot Reload (`pkg/daemon/watcher.go`) - commit: 47fda69
 
 ### Phase 9: Full Stack Example
-- [ ] 9.1 Complete Example with all features
+- [x] 9.1 Complete Example with all features - commit: 6ed5ec3
+  - E-commerce order flow example in `examples/full-stack/`
+  - Setup, task, validation, and teardown components
+  - `chronicle.yaml` with scenarios, chaos profiles, mock profiles
+  - Context propagation fix (Set propagates to parent for sibling access)
 
 ### Phase 10: Documentation & Polish
 - [ ] 10.1 Update Design Docs
@@ -82,7 +86,7 @@ None.
 
 ## Next Action
 
-**Start Phase 9.1:** Create full stack example demonstrating all Chronicle features
+**Phase 10.1:** Update design documentation to reflect implementation status
 
 ## Commit Log
 
@@ -110,6 +114,7 @@ None.
 | 6 | 6.1-6.2 | b38b5aa | Implement chaos engineering and mock system |
 | 7 | 7.1 | 06a5e5c | Implement CLI core commands (discover, validate, run, graph, results) |
 | 8 | 8.1-8.4 | 47fda69 | Implement daemon REST API with auth, event bus, and hot reload |
+| 9 | 9.1 | 6ed5ec3 | Add full-stack e-commerce example with context propagation fix |
 
 ## Context Restoration Notes
 
