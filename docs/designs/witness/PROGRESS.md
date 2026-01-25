@@ -6,11 +6,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | 7 (CLI) |
-| **Current Step** | 7.2 |
+| **Current Phase** | 8 (Daemon & API) |
+| **Current Step** | 8.1 |
 | **Status** | in_progress |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | (pending - Phase 7.1 complete) |
+| **Last Commit** | 06a5e5c |
 
 ## Phase Checklist
 
@@ -58,8 +58,8 @@
 - [x] 6.3 Examples (deferred to Phase 9)
 
 ### Phase 7: CLI
-- [x] 7.1 Core Commands (`cmd/chronicle/`, `pkg/cli/`) - commit: (pending)
-- [ ] 7.2 Graph Visualization (ASCII, DOT, Mermaid)
+- [x] 7.1 Core Commands (`cmd/chronicle/`, `pkg/cli/`) - commit: 06a5e5c
+- [x] 7.2 Graph Visualization (ASCII, DOT, Mermaid) - included in 06a5e5c
 
 ### Phase 8: Daemon & API
 - [ ] 8.1 API Server
@@ -82,7 +82,7 @@ None.
 
 ## Next Action
 
-**Complete Phase 7.2:** Polish graph visualization (already implemented in pkg/cli/graph.go)
+**Start Phase 8.1:** Implement API Server (REST endpoints for daemon mode)
 
 ## Commit Log
 
@@ -108,6 +108,7 @@ None.
 | 4 | 4.4 | (pending) | Add test runner integration with Go testing framework |
 | 5 | 5.1-5.4 | fa6965e | Implement results model, narrative, storage, and reports |
 | 6 | 6.1-6.2 | b38b5aa | Implement chaos engineering and mock system |
+| 7 | 7.1 | 06a5e5c | Implement CLI core commands (discover, validate, run, graph, results) |
 
 ## Context Restoration Notes
 
