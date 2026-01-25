@@ -10,7 +10,7 @@
 | **Current Step** | 9.1 |
 | **Status** | pending |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | (pending) |
+| **Last Commit** | 47fda69 |
 
 ## Phase Checklist
 
@@ -62,10 +62,10 @@
 - [x] 7.2 Graph Visualization (ASCII, DOT, Mermaid) - included in 06a5e5c
 
 ### Phase 8: Daemon & API
-- [x] 8.1 API Server (`pkg/daemon/server.go`, `pkg/daemon/handlers.go`) - commit: (pending)
-- [x] 8.2 Authentication (`pkg/daemon/auth.go`) - commit: (pending)
-- [x] 8.3 Event Bus (`pkg/daemon/eventbus.go`) - commit: (pending)
-- [x] 8.4 Hot Reload (`pkg/daemon/watcher.go`) - commit: (pending)
+- [x] 8.1 API Server (`pkg/daemon/server.go`, `pkg/daemon/handlers.go`) - commit: 47fda69
+- [x] 8.2 Authentication (`pkg/daemon/auth.go`) - commit: 47fda69
+- [x] 8.3 Event Bus (`pkg/daemon/eventbus.go`) - commit: 47fda69
+- [x] 8.4 Hot Reload (`pkg/daemon/watcher.go`) - commit: 47fda69
 
 ### Phase 9: Full Stack Example
 - [ ] 9.1 Complete Example with all features
@@ -109,7 +109,7 @@ None.
 | 5 | 5.1-5.4 | fa6965e | Implement results model, narrative, storage, and reports |
 | 6 | 6.1-6.2 | b38b5aa | Implement chaos engineering and mock system |
 | 7 | 7.1 | 06a5e5c | Implement CLI core commands (discover, validate, run, graph, results) |
-| 8 | 8.1-8.4 | (pending) | Implement daemon REST API with auth, event bus, and hot reload |
+| 8 | 8.1-8.4 | 47fda69 | Implement daemon REST API with auth, event bus, and hot reload |
 
 ## Context Restoration Notes
 

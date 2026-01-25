@@ -310,7 +310,7 @@ func TestContextTracing(t *testing.T) {
 }
 
 func TestContextChild(t *testing.T) {
-	t.Run("Child creates isolated context", func(t *testing.T) {
+	t.Run("Child Set propagates to parent for sibling access", func(t *testing.T) {
 		ctx := New(context.Background())
 		ctx.Set("parent_key", "parent_value")
 
@@ -322,11 +322,29 @@ func TestContextChild(t *testing.T) {
 			t.Error("child should be able to read parent's values")
 		}
 
-		// Child's values don't affect parent
+		// Child's Set values propagate to parent (so siblings can access)
 		child.Set("child_key", "child_value")
-		_, ok = ctx.Get("child_key")
+		v, ok = ctx.Get("child_key")
+		if !ok || v != "child_value" {
+			t.Error("parent should see child's Set values (for sibling access)")
+		}
+	})
+
+	t.Run("Child SetLocal is isolated", func(t *testing.T) {
+		ctx := New(context.Background())
+		child := ctx.Child("worker")
+
+		// Child's SetLocal values don't affect parent
+		child.SetLocal("local_key", "local_value")
+		_, ok := ctx.Get("local_key")
 		if ok {
-			t.Error("parent should not see child's values")
+			t.Error("parent should not see child's SetLocal values")
+		}
+
+		// But child can still access its own local value
+		v, ok := child.Get("local_key")
+		if !ok || v != "local_value" {
+			t.Error("child should be able to read its own local values")
 		}
 	})
 

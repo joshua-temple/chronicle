@@ -120,28 +120,28 @@ func printComponentsTable(components []*core.Component, showDeps bool) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 
 	if showDeps {
-		fmt.Fprintln(w, "NAME\tTYPE\tPRODUCES\tREQUIRES\tTAGS")
-		fmt.Fprintln(w, "----\t----\t--------\t--------\t----")
+		_, _ = fmt.Fprintln(w, "NAME\tTYPE\tPRODUCES\tREQUIRES\tTAGS")
+		_, _ = fmt.Fprintln(w, "----\t----\t--------\t--------\t----")
 		for _, comp := range components {
 			produces := formatDependencies(comp.Produces)
 			requires := formatDependencies(comp.Requires)
 			tags := strings.Join(comp.Tags, ", ")
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", comp.Name, comp.Type, produces, requires, tags)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", comp.Name, comp.Type, produces, requires, tags)
 		}
 	} else {
-		fmt.Fprintln(w, "NAME\tTYPE\tTAGS\tDESCRIPTION")
-		fmt.Fprintln(w, "----\t----\t----\t-----------")
+		_, _ = fmt.Fprintln(w, "NAME\tTYPE\tTAGS\tDESCRIPTION")
+		_, _ = fmt.Fprintln(w, "----\t----\t----\t-----------")
 		for _, comp := range components {
 			tags := strings.Join(comp.Tags, ", ")
 			desc := truncate(comp.Description, 50)
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", comp.Name, comp.Type, tags, desc)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", comp.Name, comp.Type, tags, desc)
 		}
 	}
 
-	fmt.Fprintf(os.Stdout, "\nFound %d component(s)\n", len(components))
+	_, _ = fmt.Fprintf(os.Stdout, "\nFound %d component(s)\n", len(components))
 	return nil
 }
 
@@ -265,13 +265,13 @@ func printTypes(registry *discovery.Registry, format string) error {
 		}
 	default:
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tPACKAGE\tFILE")
-		fmt.Fprintln(w, "----\t-------\t----")
+		_, _ = fmt.Fprintln(w, "NAME\tPACKAGE\tFILE")
+		_, _ = fmt.Fprintln(w, "----\t-------\t----")
 		for _, name := range typeNames {
 			info := registry.Types[name]
-			fmt.Fprintf(w, "%s\t%s\t%s\n", name, info.PackagePath, info.SourceFile)
+			_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", name, info.PackagePath, info.SourceFile)
 		}
-		w.Flush()
+		_ = w.Flush()
 		fmt.Printf("\nFound %d type(s)\n", len(typeNames))
 	}
 

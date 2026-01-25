@@ -86,6 +86,7 @@ type Context interface {
 	// State management
 	Get(key string) (any, bool)
 	Set(key string, value any)
+	SetLocal(key string, value any)
 
 	// Infrastructure clients
 	Client(name string) (any, error)
@@ -219,7 +220,18 @@ func (c *contextImpl) Get(key string) (any, bool) {
 }
 
 // Set stores a value in the context state.
+// Values are propagated to the parent context so sibling contexts can access them.
 func (c *contextImpl) Set(key string, value any) {
+	c.state[key] = value
+	// Also set on parent so sibling contexts can access the value
+	if c.parent != nil {
+		c.parent.Set(key, value)
+	}
+}
+
+// SetLocal stores a value only in this context's local state.
+// Unlike Set, this does not propagate to parent contexts.
+func (c *contextImpl) SetLocal(key string, value any) {
 	c.state[key] = value
 }
 
@@ -455,4 +467,11 @@ func (c *ThreadSafeContext) Set(key string, value any) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.Context.Set(key, value)
+}
+
+// SetLocal stores a value only in this context's local state (thread-safe).
+func (c *ThreadSafeContext) SetLocal(key string, value any) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Context.SetLocal(key, value)
 }

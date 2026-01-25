@@ -164,17 +164,17 @@ func parseSince(s string) (time.Time, error) {
 
 func printResultsTable(runResults []*results.RunResult) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() { _ = w.Flush() }()
 
-	fmt.Fprintln(w, "ID\tNAME\tPASS/FAIL/SKIP\tDURATION\tSTARTED")
-	fmt.Fprintln(w, "--\t----\t--------------\t--------\t-------")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tPASS/FAIL/SKIP\tDURATION\tSTARTED")
+	_, _ = fmt.Fprintln(w, "--\t----\t--------------\t--------\t-------")
 
 	for _, r := range runResults {
 		started := r.StartTime.Format("2006-01-02 15:04:05")
 		duration := r.Duration.Round(time.Millisecond).String()
 		stats := fmt.Sprintf("%d/%d/%d", r.Stats.Passed, r.Stats.Failed, r.Stats.Skipped)
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 			truncate(r.ID, 12),
 			r.Name,
 			stats,
@@ -245,22 +245,28 @@ func runResultsShow(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("\nScenarios:")
 	for _, s := range result.Scenarios {
-		icon := "✓"
-		if s.State == "failed" {
+		var icon string
+		switch s.State {
+		case "failed":
 			icon = "✗"
-		} else if s.State == "skipped" {
+		case "skipped":
 			icon = "○"
+		default:
+			icon = "✓"
 		}
 
 		fmt.Printf("  %s %s (%s)\n", icon, s.ScenarioName, s.Duration.Round(time.Millisecond))
 
 		for _, item := range s.FlowResults {
 			indent := "    "
-			itemIcon := "✓"
-			if item.State == "failed" {
+			var itemIcon string
+			switch item.State {
+			case "failed":
 				itemIcon = "✗"
-			} else if item.State == "skipped" {
+			case "skipped":
 				itemIcon = "○"
+			default:
+				itemIcon = "✓"
 			}
 
 			fmt.Printf("%s%s [%s] %s (%s)\n",
