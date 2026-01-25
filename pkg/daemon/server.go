@@ -181,6 +181,9 @@ func (s *Server) setupRoutes() {
 	// Config API
 	s.router.HandleFunc("GET /api/v1/config", s.auth.Middleware(s.handleGetConfig))
 	s.router.HandleFunc("POST /api/v1/config/reload", s.auth.Middleware(s.handleReloadConfig))
+
+	// SSE events endpoint
+	s.router.HandleFunc("GET /api/v1/events", s.auth.Middleware(s.handleEvents))
 }
 
 // Start starts the HTTP server.
