@@ -22,9 +22,10 @@ Chronicle implementation is **substantially complete** with all core phases impl
 - Terminal UI (TUI) with bubbletea
 - Test intelligence (flaky detection, performance tracking, impact analysis)
 - Web UI with React SPA (dashboard, scenarios, runs, results, components browser)
+- Standalone UI mode (`chronicle ui`) for local config editing
 
 **Remaining Gaps (Future Work):**
-- Web UI Scenario Builder (visual WYSIWYG editor)
+- Visual WYSIWYG scenario builder (drag-and-drop flow editor)
 - IDE plugins (VS Code, IntelliJ)
 - Multi-language SDKs (Python, Java, TypeScript)
 - Kubernetes deployment artifacts
@@ -115,12 +116,13 @@ Chronicle implementation is **substantially complete** with all core phases impl
 | Feature | Design | Status | Location |
 |---------|--------|--------|----------|
 | **Web UI Dashboard** | Runs, results, components | ✅ Implemented | `web/src/pages/` |
-| **Web UI Scenario Builder** | WYSIWYG editor | ❌ Not Implemented | - |
+| **Standalone Config Editor** | Local config editing | ✅ Implemented | `pkg/ui/`, `web/src/pages/ConfigEditor.tsx` |
+| **Web UI Scenario Builder** | WYSIWYG drag-drop editor | ❌ Not Implemented | - |
 | **Terminal UI (TUI)** | Interactive terminal | ✅ Implemented | `pkg/tui/` |
 | **IDE Plugins** | VS Code, IntelliJ | ❌ Not Implemented | - |
 | **Live Execution View** | Real-time streaming (SSE) | ✅ Implemented | `web/src/stores/events.ts`, `pkg/daemon/sse.go` |
 
-**Coverage: 70%** (Web UI dashboard and TUI implemented, scenario builder and IDE plugins pending)
+**Coverage: 75%** (Web UI, standalone editor, TUI implemented; visual builder and IDE plugins pending)
 
 ---
 
@@ -192,7 +194,7 @@ Infrastructure            | █████████░  95%
 Scenarios & Composition   | ██████████ 100%
 Execution                 | █████████░  90%
 Results & Reporting       | █████████░  90%
-UI Layer                  | ███████░░░  70%
+UI Layer                  | ███████░░░  75%
 Daemon Service API        | ████████░░  85%
 Multi-Language            | ███░░░░░░░  30%
 Extensibility             | ███████░░░  70%
