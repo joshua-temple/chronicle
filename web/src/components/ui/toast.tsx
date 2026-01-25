@@ -51,11 +51,6 @@ function ToastItem({ toast, onDismiss }: ToastItemProps) {
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Announce to screen readers
-    const announcement = toast.description
-      ? `${toast.title}: ${toast.description}`
-      : toast.title
-
     // Focus management for accessibility
     ref.current?.focus()
   }, [toast])

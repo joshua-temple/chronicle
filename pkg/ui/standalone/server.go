@@ -201,9 +201,46 @@ func (s *Server) handleAddProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Path == "" {
-		s.jsonError(w, http.StatusBadRequest, "name and path are required")
+	if req.Name == "" {
+		s.jsonError(w, http.StatusBadRequest, "project name is required")
 		return
+	}
+
+	// Either path or remote URL is required
+	if req.Path == "" && req.RemoteURL == "" {
+		s.jsonError(w, http.StatusBadRequest, "either path (for local project) or remote_url (for remote daemon) is required")
+		return
+	}
+
+	// Validate local project path
+	if req.Path != "" {
+		// Check if path is absolute
+		if !filepath.IsAbs(req.Path) {
+			s.jsonError(w, http.StatusBadRequest, "project path must be an absolute path")
+			return
+		}
+
+		// Check if path exists
+		info, err := os.Stat(req.Path)
+		if os.IsNotExist(err) {
+			s.jsonError(w, http.StatusBadRequest, fmt.Sprintf("path does not exist: %s", req.Path))
+			return
+		}
+		if err != nil {
+			s.jsonError(w, http.StatusBadRequest, fmt.Sprintf("cannot access path: %v", err))
+			return
+		}
+		if !info.IsDir() {
+			s.jsonError(w, http.StatusBadRequest, "path must be a directory")
+			return
+		}
+
+		// Check for chronicle.yaml
+		configPath := filepath.Join(req.Path, "chronicle.yaml")
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			s.jsonError(w, http.StatusBadRequest, fmt.Sprintf("no chronicle.yaml found in %s - is this a Chronicle project?", req.Path))
+			return
+		}
 	}
 
 	project := Project{
@@ -215,9 +252,9 @@ func (s *Server) handleAddProject(w http.ResponseWriter, r *http.Request) {
 	id, err := s.registry.Add(project)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			s.jsonError(w, http.StatusConflict, err.Error())
+			s.jsonError(w, http.StatusConflict, fmt.Sprintf("a project with this path already exists: %s", req.Path))
 		} else {
-			s.jsonError(w, http.StatusInternalServerError, err.Error())
+			s.jsonError(w, http.StatusInternalServerError, fmt.Sprintf("failed to save project: %v", err))
 		}
 		return
 	}

@@ -3,10 +3,12 @@ package standalone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 )
@@ -44,6 +46,23 @@ func (l *Launcher) Launch(ctx context.Context, project *Project) (int, error) {
 		return port, nil
 	}
 
+	// Validate project path exists
+	if project.Path == "" {
+		l.mu.Unlock()
+		return 0, errors.New("cannot launch daemon: project path is not set")
+	}
+
+	if info, err := os.Stat(project.Path); err != nil {
+		l.mu.Unlock()
+		if os.IsNotExist(err) {
+			return 0, fmt.Errorf("project directory does not exist: %s", project.Path)
+		}
+		return 0, fmt.Errorf("cannot access project directory: %w", err)
+	} else if !info.IsDir() {
+		l.mu.Unlock()
+		return 0, fmt.Errorf("project path is not a directory: %s", project.Path)
+	}
+
 	// Find an available port
 	port, err := l.findAvailablePort()
 	if err != nil {
@@ -51,8 +70,15 @@ func (l *Launcher) Launch(ctx context.Context, project *Project) (int, error) {
 		return 0, fmt.Errorf("failed to find available port: %w", err)
 	}
 
+	// Check if chronicle binary exists
+	binaryPath, err := exec.LookPath(l.binaryPath)
+	if err != nil {
+		l.mu.Unlock()
+		return 0, fmt.Errorf("chronicle binary not found: %s (ensure Chronicle is installed and in your PATH)", l.binaryPath)
+	}
+
 	// Create the command
-	cmd := exec.CommandContext(ctx, l.binaryPath, "daemon", "--addr", fmt.Sprintf(":%d", port), "--no-auth")
+	cmd := exec.CommandContext(ctx, binaryPath, "daemon", "--addr", fmt.Sprintf(":%d", port), "--no-auth")
 	cmd.Dir = project.Path
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -60,6 +86,14 @@ func (l *Launcher) Launch(ctx context.Context, project *Project) (int, error) {
 	// Start the process
 	if err := cmd.Start(); err != nil {
 		l.mu.Unlock()
+		// Provide more helpful error messages for common failures
+		errStr := err.Error()
+		if strings.Contains(errStr, "permission denied") {
+			return 0, fmt.Errorf("permission denied: cannot execute chronicle binary at %s", binaryPath)
+		}
+		if strings.Contains(errStr, "no such file") {
+			return 0, fmt.Errorf("chronicle binary not found at %s", binaryPath)
+		}
 		return 0, fmt.Errorf("failed to start daemon: %w", err)
 	}
 
@@ -72,7 +106,7 @@ func (l *Launcher) Launch(ctx context.Context, project *Project) (int, error) {
 	if err := l.waitForHealth(ctx, project.ID, port); err != nil {
 		// Health check failed - stop the process
 		_ = l.Stop(ctx, project.ID)
-		return 0, fmt.Errorf("daemon failed to become healthy: %w", err)
+		return 0, fmt.Errorf("daemon started but failed health check on port %d: %w", port, err)
 	}
 
 	return port, nil

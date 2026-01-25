@@ -47,7 +47,7 @@ const mockConfig = {
 
 describe('ConfigEditor Page', () => {
   beforeEach(() => {
-    vi.mocked(global.fetch).mockImplementation(async (url) => {
+    vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
       const urlStr = url.toString()
       if (urlStr.includes('/api/local/project')) {
         return { ok: true, json: async () => mockProject } as Response
@@ -169,7 +169,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('shows loading state initially', () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       )
 
@@ -179,7 +179,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('shows error when config not found', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return {
@@ -208,7 +208,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('shows empty infrastructure message when none configured', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -234,7 +234,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('shows empty chaos profiles message when none configured', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -260,7 +260,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('shows empty mock profiles message when none configured', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -480,7 +480,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('error state has accessible error message', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/config')) {
           return {
@@ -507,7 +507,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('loading state shows skeleton', () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {})
       )
 
@@ -554,7 +554,7 @@ describe('ConfigEditor Page', () => {
   // ============================================
   describe('Error Handling', () => {
     it('handles network error gracefully', async () => {
-      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'))
+      vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Network error'))
 
       render(<ConfigEditor />)
 
@@ -567,7 +567,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles 404 error gracefully', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         status: 404,
         json: async () => ({ error: 'Not found' }),
@@ -584,7 +584,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles 500 error gracefully', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         status: 500,
         json: async () => ({ error: 'Internal server error' }),
@@ -601,7 +601,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles missing config file', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return {
@@ -630,7 +630,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles malformed config gracefully', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -660,7 +660,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles empty scenarios array', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -698,7 +698,7 @@ describe('ConfigEditor Page', () => {
   // ============================================
   describe('Edge Cases', () => {
     it('handles config with only required fields', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -725,7 +725,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles scenarios with no flow steps', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response
@@ -760,7 +760,7 @@ describe('ConfigEditor Page', () => {
     })
 
     it('handles scenarios with no tags', async () => {
-      vi.mocked(global.fetch).mockImplementation(async (url) => {
+      vi.mocked(globalThis.fetch).mockImplementation(async (url) => {
         const urlStr = url.toString()
         if (urlStr.includes('/api/local/project')) {
           return { ok: true, json: async () => mockProject } as Response

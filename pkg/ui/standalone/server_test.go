@@ -90,8 +90,11 @@ func TestListProjects(t *testing.T) {
 func TestAddProject(t *testing.T) {
 	srv := setupTestServer(t)
 
-	// Create test project directory
+	// Create test project directory with chronicle.yaml
 	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "chronicle.yaml"), []byte("version: 1.0\n"), 0644); err != nil {
+		t.Fatalf("failed to create chronicle.yaml: %v", err)
+	}
 
 	body := strings.NewReader(`{"name":"testproject","path":"` + tmpDir + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/standalone/projects", body)
@@ -129,11 +132,104 @@ func TestAddProject(t *testing.T) {
 	}
 }
 
+// TestAddProjectValidation tests validation for adding a project.
+func TestAddProjectValidation(t *testing.T) {
+	srv := setupTestServer(t)
+
+	tests := []struct {
+		name       string
+		body       string
+		wantStatus int
+		wantError  string
+	}{
+		{
+			name:       "missing name",
+			body:       `{"path":"/tmp/test"}`,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "project name is required",
+		},
+		{
+			name:       "missing path and remote_url",
+			body:       `{"name":"test"}`,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "either path",
+		},
+		{
+			name:       "relative path",
+			body:       `{"name":"test","path":"relative/path"}`,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "absolute path",
+		},
+		{
+			name:       "nonexistent path",
+			body:       `{"name":"test","path":"/nonexistent/path/that/does/not/exist"}`,
+			wantStatus: http.StatusBadRequest,
+			wantError:  "does not exist",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body := strings.NewReader(tt.body)
+			req := httptest.NewRequest(http.MethodPost, "/api/standalone/projects", body)
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			srv.mux.ServeHTTP(w, req)
+
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d: %s", tt.wantStatus, w.Code, w.Body.String())
+			}
+
+			var resp map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+				t.Fatalf("failed to decode response: %v", err)
+			}
+
+			if !strings.Contains(resp["error"], tt.wantError) {
+				t.Errorf("expected error to contain %q, got %q", tt.wantError, resp["error"])
+			}
+		})
+	}
+}
+
+// TestAddProjectMissingChronicleYaml tests adding a project without chronicle.yaml.
+func TestAddProjectMissingChronicleYaml(t *testing.T) {
+	srv := setupTestServer(t)
+
+	// Create test directory without chronicle.yaml
+	tmpDir := t.TempDir()
+
+	body := strings.NewReader(`{"name":"testproject","path":"` + tmpDir + `"}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/standalone/projects", body)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	srv.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected status 400, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if !strings.Contains(resp["error"], "chronicle.yaml") {
+		t.Errorf("expected error to mention chronicle.yaml, got %q", resp["error"])
+	}
+}
+
 // TestAddProjectDuplicate tests adding a project with duplicate path.
 func TestAddProjectDuplicate(t *testing.T) {
 	srv := setupTestServer(t)
 
 	tmpDir := t.TempDir()
+	// Create chronicle.yaml in test directory
+	if err := os.WriteFile(filepath.Join(tmpDir, "chronicle.yaml"), []byte("version: 1.0\n"), 0644); err != nil {
+		t.Fatalf("failed to create chronicle.yaml: %v", err)
+	}
 
 	// Add first project
 	p := Project{Name: "project1", Path: tmpDir}

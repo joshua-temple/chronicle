@@ -7,8 +7,10 @@ import { Scenarios } from '@/pages/Scenarios'
 import { Results } from '@/pages/Results'
 import { Components } from '@/pages/Components'
 import { ConfigEditor } from '@/pages/ConfigEditor'
+import { ProjectSelector } from '@/components/standalone'
 import { useEventConnection } from '@/hooks/useEvents'
 import { useModeStore, useMode } from '@/stores/mode'
+import { useProjectsStore } from '@/stores/projects'
 
 function Runs() {
   return <div className="text-2xl font-bold">Runs</div>
@@ -63,11 +65,21 @@ function SSEConnectionProvider({ children }: { children: React.ReactNode }) {
 /**
  * Standalone mode routes
  * Config-focused routes for local project editing without daemon
+ * Shows ProjectSelector when no active project is selected
  */
 function StandaloneRoutes() {
+  const activeProjectId = useProjectsStore((state) => state.activeProjectId)
+  const setActiveProject = useProjectsStore((state) => state.setActiveProject)
+
+  // If no active project, show project selector (not wrapped in Layout)
+  if (!activeProjectId) {
+    return <ProjectSelector />
+  }
+
+  // Active project selected - show project UI with back navigation
   return (
     <Routes>
-      <Route element={<Layout />}>
+      <Route element={<Layout onBackToProjects={() => setActiveProject(null)} />}>
         <Route path="/" element={<Navigate to="/config" replace />} />
         <Route path="/config" element={<ConfigEditor />} />
         <Route path="/scenarios" element={<Scenarios />} />

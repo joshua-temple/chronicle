@@ -43,7 +43,7 @@ const mockScenarios = {
 
 describe('Scenarios Page', () => {
   beforeEach(() => {
-    vi.mocked(global.fetch).mockResolvedValue({
+    vi.mocked(globalThis.fetch).mockResolvedValue({
       ok: true,
       json: async () => mockScenarios,
     } as Response)
@@ -99,7 +99,7 @@ describe('Scenarios Page', () => {
     })
 
     it('shows loading state initially', () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       )
 
@@ -110,7 +110,7 @@ describe('Scenarios Page', () => {
     })
 
     it('shows empty state when no scenarios', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ ...mockScenarios, scenarios: [] }),
       } as Response)
@@ -305,7 +305,6 @@ describe('Scenarios Page', () => {
     })
 
     it('scenario cards are keyboard accessible', async () => {
-      const user = userEvent.setup()
       render(<Scenarios />)
 
       await waitFor(() => {
@@ -343,7 +342,7 @@ describe('Scenarios Page', () => {
   // ============================================
   describe('Error Handling', () => {
     it('handles network error gracefully', async () => {
-      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'))
+      vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Network error'))
 
       render(<Scenarios />)
 
@@ -360,7 +359,7 @@ describe('Scenarios Page', () => {
     })
 
     it('handles API error response gracefully', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         status: 500,
         json: async () => ({ error: 'Internal server error' }),
@@ -373,7 +372,7 @@ describe('Scenarios Page', () => {
     })
 
     it('handles empty scenarios array', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ ...mockScenarios, scenarios: [] }),
       } as Response)
@@ -386,7 +385,7 @@ describe('Scenarios Page', () => {
     })
 
     it('handles null scenarios gracefully', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ ...mockScenarios, scenarios: null }),
       } as Response)

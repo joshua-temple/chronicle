@@ -88,7 +88,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('fetchProjects', () => {
     it('fetches projects successfully', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [mockProject] }),
       } as Response)
@@ -102,7 +102,7 @@ describe('Projects Store', () => {
       expect(result.current.projects).toEqual([mockProject])
       expect(result.current.loading).toBe(false)
       expect(result.current.error).toBeNull()
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects')
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects')
     })
 
     it('sets loading state during fetch', async () => {
@@ -110,7 +110,7 @@ describe('Projects Store', () => {
       const fetchPromise = new Promise<Response>((resolve) => {
         resolvePromise = resolve
       })
-      vi.mocked(global.fetch).mockReturnValueOnce(fetchPromise)
+      vi.mocked(globalThis.fetch).mockReturnValueOnce(fetchPromise)
 
       const { result } = renderHook(() => useProjectsStore())
 
@@ -134,7 +134,7 @@ describe('Projects Store', () => {
     })
 
     it('handles fetch error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Internal Server Error',
       } as Response)
@@ -150,7 +150,7 @@ describe('Projects Store', () => {
     })
 
     it('handles network error', async () => {
-      vi.mocked(global.fetch).mockRejectedValueOnce(new Error('Network error'))
+      vi.mocked(globalThis.fetch).mockRejectedValueOnce(new Error('Network error'))
 
       const { result } = renderHook(() => useProjectsStore())
 
@@ -163,7 +163,7 @@ describe('Projects Store', () => {
     })
 
     it('handles empty projects response', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: null }),
       } as Response)
@@ -183,7 +183,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('addProject', () => {
     it('adds a project successfully', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ id: 'new-proj' }),
@@ -199,7 +199,7 @@ describe('Projects Store', () => {
         await result.current.addProject({ name: 'New Project', path: '/new/path' })
       })
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects', {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'New Project', path: '/new/path' }),
@@ -208,7 +208,7 @@ describe('Projects Store', () => {
     })
 
     it('handles add project error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Bad Request',
       } as Response)
@@ -228,7 +228,7 @@ describe('Projects Store', () => {
     })
 
     it('refreshes projects after adding', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ id: 'new-proj' }),
@@ -244,8 +244,8 @@ describe('Projects Store', () => {
         await result.current.addProject({ name: 'New Project' })
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(2)
-      expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/standalone/projects')
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/standalone/projects')
     })
   })
 
@@ -254,7 +254,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('removeProject', () => {
     it('removes a project successfully', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({}),
@@ -270,14 +270,14 @@ describe('Projects Store', () => {
         await result.current.removeProject('proj-1')
       })
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1', {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1', {
         method: 'DELETE',
       })
       expect(result.current.error).toBeNull()
     })
 
     it('handles remove project error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Not Found',
       } as Response)
@@ -299,7 +299,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('updateProject', () => {
     it('updates a project successfully', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({}),
@@ -315,7 +315,7 @@ describe('Projects Store', () => {
         await result.current.updateProject('proj-1', { name: 'Updated Name' })
       })
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1', {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Updated Name' }),
@@ -324,7 +324,7 @@ describe('Projects Store', () => {
     })
 
     it('handles update project error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Forbidden',
       } as Response)
@@ -346,7 +346,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('launchProject', () => {
     it('launches a project successfully', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ port: 8080 }),
@@ -364,14 +364,14 @@ describe('Projects Store', () => {
         await result.current.launchProject('proj-1')
       })
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1/launch', {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1/launch', {
         method: 'POST',
       })
       expect(result.current.error).toBeNull()
     })
 
     it('handles launch project error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Service Unavailable',
       } as Response)
@@ -386,7 +386,7 @@ describe('Projects Store', () => {
     })
 
     it('refreshes projects after launching to get updated status', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({}),
@@ -402,7 +402,7 @@ describe('Projects Store', () => {
         await result.current.launchProject('proj-1')
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -411,7 +411,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('stopProject', () => {
     it('stops a project successfully', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({}),
@@ -429,14 +429,14 @@ describe('Projects Store', () => {
         await result.current.stopProject('proj-1')
       })
 
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1/stop', {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects/proj-1/stop', {
         method: 'POST',
       })
       expect(result.current.error).toBeNull()
     })
 
     it('handles stop project error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Internal Server Error',
       } as Response)
@@ -456,7 +456,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('setActiveProject', () => {
     it('sets active project id', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [mockProject] }),
       } as Response)
@@ -491,7 +491,7 @@ describe('Projects Store', () => {
     })
 
     it('useActiveProject returns the active project', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [mockProject] }),
       } as Response)
@@ -511,7 +511,7 @@ describe('Projects Store', () => {
     })
 
     it('useActiveProject returns null for nonexistent project', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [mockProject] }),
       } as Response)
@@ -536,7 +536,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('discover', () => {
     it('discovers projects successfully', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [mockDiscoveredProject] }),
       } as Response)
@@ -550,13 +550,13 @@ describe('Projects Store', () => {
       expect(result.current.discovered).toEqual([mockDiscoveredProject])
       expect(result.current.loading).toBe(false)
       expect(result.current.error).toBeNull()
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/discover', {
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/discover', {
         method: 'POST',
       })
     })
 
     it('handles discover error', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Internal Server Error',
       } as Response)
@@ -572,7 +572,7 @@ describe('Projects Store', () => {
     })
 
     it('handles empty discovered projects', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: null }),
       } as Response)
@@ -587,7 +587,7 @@ describe('Projects Store', () => {
     })
 
     it('useDiscoveredProjects returns discovered projects', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [mockDiscoveredProject] }),
       } as Response)
@@ -608,7 +608,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('clearError', () => {
     it('clears the error state', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Error',
       } as Response)
@@ -634,7 +634,7 @@ describe('Projects Store', () => {
   // ============================================
   describe('Edge Cases', () => {
     it('handles non-Error thrown objects', async () => {
-      vi.mocked(global.fetch).mockRejectedValueOnce('String error')
+      vi.mocked(globalThis.fetch).mockRejectedValueOnce('String error')
 
       const { result } = renderHook(() => useProjectsStore())
 
@@ -647,7 +647,7 @@ describe('Projects Store', () => {
 
     it('clears error before starting new operation', async () => {
       // First call fails
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: false,
         statusText: 'Error',
       } as Response)
@@ -660,7 +660,7 @@ describe('Projects Store', () => {
       expect(result.current.error).not.toBeNull()
 
       // Second call succeeds
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -678,7 +678,7 @@ describe('Projects Store', () => {
         { ...mockProject, id: 'proj-3', name: 'Project 3' },
       ]
 
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ projects: multipleProjects }),
       } as Response)
@@ -704,7 +704,7 @@ describe('Projects Store', () => {
         resolveFirst = resolve
       })
 
-      vi.mocked(global.fetch).mockReturnValueOnce(firstPromise)
+      vi.mocked(globalThis.fetch).mockReturnValueOnce(firstPromise)
 
       const { result } = renderHook(() => useProjectsStore())
 
@@ -727,7 +727,7 @@ describe('Projects Store', () => {
       })
 
       // Only one fetch should have been made
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
       expect(result.current.projects).toEqual([mockProject])
     })
 
@@ -737,7 +737,7 @@ describe('Projects Store', () => {
         resolveFirst = resolve
       })
 
-      vi.mocked(global.fetch).mockReturnValueOnce(firstPromise)
+      vi.mocked(globalThis.fetch).mockReturnValueOnce(firstPromise)
 
       const { result } = renderHook(() => useProjectsStore())
 
@@ -760,12 +760,12 @@ describe('Projects Store', () => {
       })
 
       // Only one discover should have been made
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
       expect(result.current.discovered).toEqual([mockDiscoveredProject])
     })
 
     it('allows fetch after previous fetch completes', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: [mockProject] }),
@@ -789,12 +789,12 @@ describe('Projects Store', () => {
         await result.current.fetchProjects()
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
       expect(result.current.projects[0].name).toBe('Updated')
     })
 
     it('allows discover after previous discover completes', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: [mockDiscoveredProject] }),
@@ -818,12 +818,12 @@ describe('Projects Store', () => {
         await result.current.discover()
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
       expect(result.current.discovered[0].name).toBe('Updated Discovered')
     })
 
     it('resets fetch flag after error', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({
           ok: true,
@@ -844,12 +844,12 @@ describe('Projects Store', () => {
         await result.current.fetchProjects()
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
       expect(result.current.projects).toEqual([mockProject])
     })
 
     it('resets discover flag after error', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockRejectedValueOnce(new Error('Network error'))
         .mockResolvedValueOnce({
           ok: true,
@@ -870,7 +870,7 @@ describe('Projects Store', () => {
         await result.current.discover()
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
       expect(result.current.discovered).toEqual([mockDiscoveredProject])
     })
   })
@@ -880,9 +880,9 @@ describe('Projects Store', () => {
   // ============================================
   describe('JSON Parsing Errors', () => {
     it('handles JSON parsing error during fetch', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
-        json: async () => {
+        json: async (): Promise<unknown> => {
           throw new Error('Invalid JSON')
         },
       } as Response)
@@ -898,9 +898,9 @@ describe('Projects Store', () => {
     })
 
     it('handles JSON parsing error during discover', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
-        json: async () => {
+        json: async (): Promise<unknown> => {
           throw new Error('Invalid JSON')
         },
       } as Response)
@@ -934,7 +934,7 @@ describe('Projects Store', () => {
     })
 
     it('starts polling with default interval', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [mockProject] }),
       } as Response)
@@ -950,7 +950,7 @@ describe('Projects Store', () => {
       expect(result.current.pollingIntervalMs).toBe(5000) // POLLING_INTERVAL_ACTIVE
 
       // Initial fetch should have been called
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
 
       // Cleanup
       act(() => {
@@ -959,7 +959,7 @@ describe('Projects Store', () => {
     })
 
     it('starts polling with custom interval', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -979,7 +979,7 @@ describe('Projects Store', () => {
     })
 
     it('stops polling and clears interval', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -1000,7 +1000,7 @@ describe('Projects Store', () => {
     })
 
     it('fetches projects at each interval', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [mockProject] }),
       } as Response)
@@ -1012,7 +1012,7 @@ describe('Projects Store', () => {
       })
 
       // Initial fetch
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
 
       // Advance by 1 second - use advanceTimersByTimeAsync to handle async operations
       await act(async () => {
@@ -1020,14 +1020,14 @@ describe('Projects Store', () => {
       })
 
       // Should have triggered another fetch
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
 
       // Advance by another second
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000)
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(3)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(3)
 
       // Cleanup
       act(() => {
@@ -1036,7 +1036,7 @@ describe('Projects Store', () => {
     })
 
     it('prevents multiple polling intervals when called multiple times', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -1063,7 +1063,7 @@ describe('Projects Store', () => {
     })
 
     it('setPollingInterval adjusts timing when polling', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -1104,7 +1104,7 @@ describe('Projects Store', () => {
     })
 
     it('setPollingInterval does nothing if interval unchanged', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -1142,7 +1142,7 @@ describe('Projects Store', () => {
     })
 
     it('stops fetching after stopPolling is called', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -1154,7 +1154,7 @@ describe('Projects Store', () => {
       })
 
       // Initial fetch
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
 
       act(() => {
         result.current.stopPolling()
@@ -1166,7 +1166,7 @@ describe('Projects Store', () => {
       })
 
       // Should still be just 1 fetch (the initial one)
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
     })
   })
 })

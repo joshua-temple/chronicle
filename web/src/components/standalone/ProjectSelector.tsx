@@ -12,6 +12,7 @@ import {
   useProjectsLoading,
   useProjectsError,
 } from '@/stores/projects'
+import { usePolling } from '@/hooks/usePolling'
 
 export function ProjectSelector() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -23,7 +24,6 @@ export function ProjectSelector() {
   const error = useProjectsError()
 
   const {
-    fetchProjects,
     addProject,
     removeProject,
     launchProject,
@@ -31,16 +31,16 @@ export function ProjectSelector() {
     setActiveProject,
     discover,
     clearError,
+    fetchProjects,
   } = useProjectsStore()
 
-  // Fetch projects and discover on mount (sequentially to avoid race condition)
+  // Start polling for project status updates (handles visibility changes automatically)
+  usePolling()
+
+  // Discover projects on mount
   useEffect(() => {
-    const init = async () => {
-      await fetchProjects()
-      await discover()
-    }
-    init()
-  }, [fetchProjects, discover])
+    discover()
+  }, [discover])
 
   const handleRefresh = useCallback(async () => {
     await fetchProjects()
@@ -57,7 +57,9 @@ export function ProjectSelector() {
 
   const handleAddProject = useCallback(
     async (project: { name: string; path?: string; remoteUrl?: string }) => {
+      // addProject will throw if it fails, allowing the modal to handle the error
       await addProject(project)
+      // Only close on success
       setIsAddModalOpen(false)
     },
     [addProject]

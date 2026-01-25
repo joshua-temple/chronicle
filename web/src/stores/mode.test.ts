@@ -49,7 +49,7 @@ describe('Mode Store', () => {
   // ============================================
   describe('Standalone Mode Detection', () => {
     it('detects standalone mode from /api/standalone/mode endpoint', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ mode: 'standalone' }),
       } as Response)
@@ -61,11 +61,11 @@ describe('Mode Store', () => {
       })
 
       expect(result.current.mode).toBe('standalone')
-      expect(global.fetch).toHaveBeenCalledWith('/api/standalone/mode')
+      expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/mode')
     })
 
     it('useIsStandalone returns true in standalone mode', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ mode: 'standalone' }),
       } as Response)
@@ -86,7 +86,7 @@ describe('Mode Store', () => {
   describe('Daemon Mode Detection', () => {
     it('falls back to daemon mode when standalone endpoint returns 404', async () => {
       // First call to standalone endpoint fails
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: false,
           status: 404,
@@ -104,13 +104,13 @@ describe('Mode Store', () => {
       })
 
       expect(result.current.mode).toBe('daemon')
-      expect(global.fetch).toHaveBeenCalledTimes(2)
-      expect(global.fetch).toHaveBeenNthCalledWith(1, '/api/standalone/mode')
-      expect(global.fetch).toHaveBeenNthCalledWith(2, '/api/v1/health')
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2)
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(1, '/api/standalone/mode')
+      expect(globalThis.fetch).toHaveBeenNthCalledWith(2, '/api/v1/health')
     })
 
     it('useIsDaemon returns true in daemon mode', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({ ok: false, status: 404 } as Response)
         .mockResolvedValueOnce({
           ok: true,
@@ -132,7 +132,7 @@ describe('Mode Store', () => {
   // ============================================
   describe('Disconnected Mode', () => {
     it('sets disconnected when both endpoints fail', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({ ok: false, status: 404 } as Response)
         .mockResolvedValueOnce({ ok: false, status: 404 } as Response)
 
@@ -146,7 +146,7 @@ describe('Mode Store', () => {
     })
 
     it('sets disconnected when network errors occur', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockRejectedValueOnce(new Error('Network error'))
         .mockRejectedValueOnce(new Error('Network error'))
 
@@ -165,7 +165,7 @@ describe('Mode Store', () => {
   // ============================================
   describe('Caching Behavior', () => {
     it('caches mode after first detection', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ mode: 'standalone' }),
       } as Response)
@@ -177,7 +177,7 @@ describe('Mode Store', () => {
         await result.current.detectMode()
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
 
       // Second detection should use cache
       await act(async () => {
@@ -185,12 +185,12 @@ describe('Mode Store', () => {
       })
 
       // Should not make additional fetch calls
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
       expect(result.current.mode).toBe('standalone')
     })
 
     it('prevents concurrent detection calls', async () => {
-      vi.mocked(global.fetch).mockResolvedValueOnce({
+      vi.mocked(globalThis.fetch).mockResolvedValueOnce({
         ok: true,
         json: async () => ({ mode: 'standalone' }),
       } as Response)
@@ -204,7 +204,7 @@ describe('Mode Store', () => {
         ])
       })
 
-      expect(global.fetch).toHaveBeenCalledTimes(1)
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -228,7 +228,7 @@ describe('Mode Store', () => {
   // ============================================
   describe('Edge Cases', () => {
     it('handles malformed response from standalone endpoint', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ notMode: 'something' }),
@@ -249,7 +249,7 @@ describe('Mode Store', () => {
     })
 
     it('handles response with wrong mode value', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ mode: 'other' }),
@@ -269,7 +269,7 @@ describe('Mode Store', () => {
     })
 
     it('handles null response from standalone endpoint', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => null,
@@ -289,10 +289,10 @@ describe('Mode Store', () => {
     })
 
     it('handles JSON parsing error from standalone endpoint', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => {
+          json: async (): Promise<unknown> => {
             throw new Error('Invalid JSON')
           },
         } as Response)

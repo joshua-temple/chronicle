@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@/test/utils'
 import userEvent from '@testing-library/user-event'
 import { ProjectSelector } from './ProjectSelector'
-import { useProjectsStore, _resetOperationFlags } from '@/stores/projects'
+import {
+  useProjectsStore,
+  _resetOperationFlags,
+  POLLING_INTERVAL_ACTIVE,
+} from '@/stores/projects'
 import type { Project } from '@/stores/projects'
 
 // Mock the mode store
@@ -50,22 +54,36 @@ const mockDiscoveredProjects: Project[] = [
 
 describe('ProjectSelector', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     _resetOperationFlags()
+    // Stop any existing polling and reset store state
+    const state = useProjectsStore.getState()
+    if (state.pollingIntervalId !== null) {
+      state.stopPolling()
+    }
     useProjectsStore.setState({
       projects: [],
       discovered: [],
       loading: false,
       error: null,
       activeProjectId: null,
+      pollingIntervalId: null,
+      pollingIntervalMs: POLLING_INTERVAL_ACTIVE,
     })
-    vi.mocked(global.fetch).mockResolvedValue({
+    vi.mocked(globalThis.fetch).mockResolvedValue({
       ok: true,
       json: async () => ({ projects: mockProjects }),
     } as Response)
   })
 
   afterEach(() => {
+    // Clean up polling
+    const state = useProjectsStore.getState()
+    if (state.pollingIntervalId !== null) {
+      state.stopPolling()
+    }
     vi.clearAllMocks()
+    vi.useRealTimers()
   })
 
   // ============================================
@@ -73,7 +91,7 @@ describe('ProjectSelector', () => {
   // ============================================
   describe('Loading State', () => {
     it('shows loading skeletons when loading with no projects', async () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       )
 
@@ -84,7 +102,7 @@ describe('ProjectSelector', () => {
     })
 
     it('shows refresh button with spinner when loading', async () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       )
 
@@ -103,7 +121,7 @@ describe('ProjectSelector', () => {
   // ============================================
   describe('Error Display', () => {
     it('displays error message when fetch fails', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         statusText: 'Internal Server Error',
         json: async () => ({}),
@@ -111,13 +129,14 @@ describe('ProjectSelector', () => {
 
       render(<ProjectSelector />)
 
+      // With polling, both fetch and discover run, so we match any error
       await waitFor(() => {
-        expect(screen.getByText(/failed to fetch projects/i)).toBeInTheDocument()
+        expect(screen.getByText(/failed to (fetch|discover) projects/i)).toBeInTheDocument()
       })
     })
 
     it('shows dismiss button for errors', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         statusText: 'Internal Server Error',
         json: async () => ({}),
@@ -131,7 +150,7 @@ describe('ProjectSelector', () => {
     })
 
     it('shows retry button for errors', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         statusText: 'Internal Server Error',
         json: async () => ({}),
@@ -145,32 +164,27 @@ describe('ProjectSelector', () => {
     })
 
     it('clears error when dismiss is clicked', async () => {
-      const user = userEvent.setup()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
-      // First call fails for fetchProjects, second call also fails for discover
-      vi.mocked(global.fetch)
-        .mockResolvedValueOnce({
-          ok: false,
-          statusText: 'Internal Server Error',
-          json: async () => ({}),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: false,
-          statusText: 'Internal Server Error',
-          json: async () => ({}),
-        } as Response)
+      // All calls fail
+      vi.mocked(globalThis.fetch).mockResolvedValue({
+        ok: false,
+        statusText: 'Internal Server Error',
+        json: async () => ({}),
+      } as Response)
 
       render(<ProjectSelector />)
 
+      // With polling, both fetch and discover run, so we match any error
       await waitFor(() => {
-        expect(screen.getByText(/failed to fetch projects/i)).toBeInTheDocument()
+        expect(screen.getByText(/failed to (fetch|discover) projects/i)).toBeInTheDocument()
       })
 
       const dismissButton = screen.getByRole('button', { name: /dismiss/i })
       await user.click(dismissButton)
 
       await waitFor(() => {
-        expect(screen.queryByText(/failed to fetch projects/i)).not.toBeInTheDocument()
+        expect(screen.queryByText(/failed to (fetch|discover) projects/i)).not.toBeInTheDocument()
       })
     })
   })
@@ -181,7 +195,7 @@ describe('ProjectSelector', () => {
   describe('Project List Rendering', () => {
     it('renders project list after loading', async () => {
       // Mock both fetchProjects and discover calls
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: mockProjects }),
@@ -220,7 +234,7 @@ describe('ProjectSelector', () => {
     })
 
     it('shows empty state when no projects exist', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -235,7 +249,7 @@ describe('ProjectSelector', () => {
     })
 
     it('shows Add Project button in empty state', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: [] }),
       } as Response)
@@ -253,7 +267,7 @@ describe('ProjectSelector', () => {
   // ============================================
   describe('Discovered Projects', () => {
     it('shows discovered projects section', async () => {
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: mockProjects }),
@@ -285,7 +299,7 @@ describe('ProjectSelector', () => {
         },
       ]
 
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: mockProjects }),
@@ -316,10 +330,10 @@ describe('ProjectSelector', () => {
   // ============================================
   describe('Interactions', () => {
     it('opens add project modal when Add Project button is clicked', async () => {
-      const user = userEvent.setup()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
       // Mock both fetchProjects and discover calls
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: mockProjects }),
@@ -347,15 +361,15 @@ describe('ProjectSelector', () => {
     })
 
     it('refreshes projects when refresh button is clicked', async () => {
-      const user = userEvent.setup()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       render(<ProjectSelector />)
 
       await waitFor(() => {
         expect(screen.getByText('chronicle-main')).toBeInTheDocument()
       })
 
-      vi.mocked(global.fetch).mockClear()
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockClear()
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: mockProjects }),
       } as Response)
@@ -364,14 +378,14 @@ describe('ProjectSelector', () => {
       await user.click(refreshButton)
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/standalone/projects')
+        expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/projects')
       })
     })
 
     it('triggers scan when Scan Again button is clicked', async () => {
-      const user = userEvent.setup()
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
 
-      vi.mocked(global.fetch)
+      vi.mocked(globalThis.fetch)
         .mockResolvedValueOnce({
           ok: true,
           json: async () => ({ projects: mockProjects }),
@@ -387,8 +401,8 @@ describe('ProjectSelector', () => {
         expect(screen.getByText('Discovered Projects')).toBeInTheDocument()
       })
 
-      vi.mocked(global.fetch).mockClear()
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockClear()
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ projects: mockDiscoveredProjects }),
       } as Response)
@@ -397,7 +411,7 @@ describe('ProjectSelector', () => {
       await user.click(scanButton)
 
       await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith('/api/standalone/discover', expect.any(Object))
+        expect(globalThis.fetch).toHaveBeenCalledWith('/api/standalone/discover', expect.any(Object))
       })
     })
   })

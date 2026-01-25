@@ -35,7 +35,7 @@ function customRender(ui: ReactElement, options?: Omit<RenderOptions, 'wrapper'>
 
 // Mock API responses helper
 export function mockFetch(responses: Record<string, unknown>) {
-  return vi.mocked(global.fetch).mockImplementation(async (url) => {
+  return vi.mocked(globalThis.fetch).mockImplementation(async (url: RequestInfo | URL) => {
     const urlStr = url.toString()
     for (const [pattern, response] of Object.entries(responses)) {
       if (urlStr.includes(pattern)) {

@@ -1,16 +1,16 @@
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Play, Square, Trash2, ExternalLink, Globe, Folder } from 'lucide-react'
+import { Play, Square, Trash2, ExternalLink, Globe, Folder, RefreshCw, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Project, ProjectState } from '@/stores/projects'
 
 interface ProjectCardProps {
   project: Project
   onOpen: (id: string) => void
-  onLaunch: (id: string) => void
-  onStop: (id: string) => void
-  onRemove: (id: string) => void
+  onLaunch: (id: string) => Promise<void>
+  onStop: (id: string) => Promise<void>
+  onRemove: (id: string) => Promise<void>
   disabled?: boolean
 }
 
@@ -57,11 +57,51 @@ export function ProjectCard({
   disabled = false,
 }: ProjectCardProps) {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
+  const [isRetrying, setIsRetrying] = useState(false)
+  const [localError, setLocalError] = useState<string | null>(null)
   const isLocal = Boolean(project.path)
   const isRemote = Boolean(project.remoteUrl)
   const isRunning = project.status.state === 'running'
   const isStarting = project.status.state === 'starting'
-  const canControl = isLocal && !isStarting
+  const isUnhealthy = project.status.state === 'unhealthy'
+  const canControl = isLocal && !isStarting && !isRetrying
+
+  // Combined error from status or local operations
+  const displayError = localError || project.status.error
+
+  const handleLaunch = async () => {
+    setLocalError(null)
+    setIsRetrying(true)
+    try {
+      await onLaunch(project.id)
+    } catch (error) {
+      // Error is already handled by the store, but we can show local feedback
+      if (error instanceof Error) {
+        setLocalError(error.message)
+      }
+    } finally {
+      setIsRetrying(false)
+    }
+  }
+
+  const handleRetryLaunch = async () => {
+    setLocalError(null)
+    await handleLaunch()
+  }
+
+  const handleStop = async () => {
+    setLocalError(null)
+    setIsRetrying(true)
+    try {
+      await onStop(project.id)
+    } catch (error) {
+      if (error instanceof Error) {
+        setLocalError(error.message)
+      }
+    } finally {
+      setIsRetrying(false)
+    }
+  }
 
   const handleRemoveClick = () => {
     if (showRemoveConfirm) {
@@ -117,20 +157,41 @@ export function ProjectCard({
           {/* Right: Status Info */}
           <div className="text-right shrink-0">
             <p className="text-sm font-medium">
-              {isRunning && project.status.port
-                ? `Running on :${project.status.port}`
-                : STATUS_LABELS[project.status.state]}
+              {isRetrying
+                ? 'Processing...'
+                : isRunning && project.status.port
+                  ? `Running on :${project.status.port}`
+                  : STATUS_LABELS[project.status.state]}
             </p>
             <p className="text-xs text-muted-foreground">
               Last run: {formatRelativeTime(project.lastOpened)}
             </p>
-            {project.status.error && (
-              <p className="text-xs text-destructive mt-1 max-w-48 truncate" title={project.status.error}>
-                {project.status.error}
-              </p>
-            )}
           </div>
         </div>
+
+        {/* Error Display with Retry */}
+        {displayError && (
+          <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-destructive">{displayError}</p>
+              </div>
+              {isLocal && !isRunning && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetryLaunch}
+                  disabled={disabled || isRetrying}
+                  className="shrink-0"
+                >
+                  <RefreshCw className={cn('h-3 w-3 mr-1', isRetrying && 'animate-spin')} />
+                  Retry
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="mt-4 flex items-center justify-end gap-2">
@@ -172,21 +233,31 @@ export function ProjectCard({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onStop(project.id)}
-                    disabled={disabled}
+                    onClick={handleStop}
+                    disabled={disabled || isRetrying}
                   >
                     <Square className="h-4 w-4 mr-1" />
                     Stop
+                  </Button>
+                ) : isUnhealthy ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRetryLaunch}
+                    disabled={disabled || isRetrying}
+                  >
+                    <RefreshCw className={cn('h-4 w-4 mr-1', isRetrying && 'animate-spin')} />
+                    Retry
                   </Button>
                 ) : (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => onLaunch(project.id)}
-                    disabled={disabled}
+                    onClick={handleLaunch}
+                    disabled={disabled || isRetrying}
                   >
-                    <Play className="h-4 w-4 mr-1" />
-                    Launch
+                    <Play className={cn('h-4 w-4 mr-1', isRetrying && 'animate-spin')} />
+                    {isRetrying ? 'Launching...' : 'Launch'}
                   </Button>
                 )
               )}
@@ -195,7 +266,7 @@ export function ProjectCard({
                 variant="default"
                 size="sm"
                 onClick={() => onOpen(project.id)}
-                disabled={disabled || (!isRunning && !isRemote)}
+                disabled={disabled || isRetrying || (!isRunning && !isRemote)}
                 title={!isRunning && !isRemote ? 'Launch project first' : undefined}
               >
                 <ExternalLink className="h-4 w-4 mr-1" />

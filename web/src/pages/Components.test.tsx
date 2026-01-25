@@ -62,7 +62,7 @@ const mockComponents = {
 
 describe('Components Page', () => {
   beforeEach(() => {
-    vi.mocked(global.fetch).mockResolvedValue({
+    vi.mocked(globalThis.fetch).mockResolvedValue({
       ok: true,
       json: async () => mockComponents,
     } as Response)
@@ -125,7 +125,7 @@ describe('Components Page', () => {
     })
 
     it('shows loading state initially', () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {}) // Never resolves
       )
 
@@ -135,7 +135,7 @@ describe('Components Page', () => {
     })
 
     it('shows empty state when no components', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ components: [], discovered_at: '' }),
       } as Response)
@@ -521,7 +521,7 @@ describe('Components Page', () => {
     })
 
     it('loading skeleton exists during load', () => {
-      vi.mocked(global.fetch).mockImplementation(
+      vi.mocked(globalThis.fetch).mockImplementation(
         () => new Promise(() => {})
       )
 
@@ -537,7 +537,7 @@ describe('Components Page', () => {
   // ============================================
   describe('Error Handling', () => {
     it('handles network error gracefully', async () => {
-      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'))
+      vi.mocked(globalThis.fetch).mockRejectedValue(new Error('Network error'))
 
       render(<Components />)
 
@@ -556,7 +556,7 @@ describe('Components Page', () => {
     })
 
     it('handles API error response gracefully', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: false,
         status: 500,
         json: async () => ({ error: 'Internal server error' }),
@@ -569,7 +569,7 @@ describe('Components Page', () => {
     })
 
     it('handles empty components array', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ components: [], discovered_at: '' }),
       } as Response)
@@ -582,7 +582,7 @@ describe('Components Page', () => {
     })
 
     it('handles null components gracefully', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({ components: null, discovered_at: '' }),
       } as Response)
@@ -602,7 +602,7 @@ describe('Components Page', () => {
     })
 
     it('handles components without optional fields', async () => {
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         ok: true,
         json: async () => ({
           components: [
