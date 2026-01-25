@@ -1,0 +1,54 @@
+package daemon
+
+import (
+	"io/fs"
+	"net/http"
+	"strings"
+)
+
+// WebFS is set externally when the web UI is embedded.
+// See cmd/chronicle/embed.go for the actual embed directive.
+var WebFS fs.FS
+
+// spaHandler wraps a file server to handle SPA routing.
+// For any path that doesn't match a real file, it serves index.html.
+func spaHandler(fsys fs.FS) http.Handler {
+	fileServer := http.FileServer(http.FS(fsys))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+
+		// Try to open the file
+		f, err := fsys.Open(path)
+		if err != nil {
+			// File not found - serve index.html for SPA routing
+			r.URL.Path = "/"
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		_ = f.Close()
+
+		// File exists, serve it
+		fileServer.ServeHTTP(w, r)
+	})
+}
+
+// devModeHandler returns a handler for when no embedded files are available.
+func devModeHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<!DOCTYPE html>
+<html>
+<head><title>Chronicle</title></head>
+<body style="font-family: system-ui; max-width: 600px; margin: 50px auto; padding: 20px;">
+<h1>Chronicle API Server</h1>
+<p>Web UI not embedded. For development:</p>
+<pre>cd web && npm run dev</pre>
+<p>API available at <a href="/api/v1/health">/api/v1/health</a></p>
+</body>
+</html>`))
+	})
+}

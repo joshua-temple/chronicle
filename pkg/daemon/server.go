@@ -184,6 +184,13 @@ func (s *Server) setupRoutes() {
 
 	// SSE events endpoint
 	s.router.HandleFunc("GET /api/v1/events", s.auth.Middleware(s.handleEvents))
+
+	// Static file serving (SPA) - must be last to not interfere with API routes
+	if WebFS != nil {
+		s.router.Handle("GET /", spaHandler(WebFS))
+	} else {
+		s.router.Handle("GET /", devModeHandler())
+	}
 }
 
 // Start starts the HTTP server.
