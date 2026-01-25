@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Folder, Globe } from 'lucide-react'
+import { Folder, Globe, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 type ProjectType = 'local' | 'remote'
@@ -10,7 +10,7 @@ type ProjectType = 'local' | 'remote'
 interface AddProjectModalProps {
   open: boolean
   onClose: () => void
-  onSubmit: (project: { name: string; path?: string; remoteUrl?: string }) => void
+  onSubmit: (project: { name: string; path?: string; remoteUrl?: string }) => Promise<void>
   loading?: boolean
 }
 
@@ -56,6 +56,8 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
   const [remoteUrl, setRemoteUrl] = useState('')
   const [errors, setErrors] = useState<{ name?: string; path?: string; remoteUrl?: string }>({})
   const [touched, setTouched] = useState<{ name?: boolean; path?: boolean; remoteUrl?: boolean }>({})
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Reset form when modal opens/closes
   useEffect(() => {
@@ -66,6 +68,8 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
       setRemoteUrl('')
       setErrors({})
       setTouched({})
+      setSubmitError(null)
+      setIsSubmitting(false)
     }
   }, [open])
 
@@ -98,7 +102,7 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
     return Object.keys(newErrors).length === 0
   }, [name, path, remoteUrl, projectType])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // Mark all fields as touched
@@ -106,18 +110,50 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
 
     if (!validate()) return
 
-    onSubmit({
-      name: name.trim(),
-      path: projectType === 'local' ? path.trim() : undefined,
-      remoteUrl: projectType === 'remote' ? remoteUrl.trim() : undefined,
-    })
+    setSubmitError(null)
+    setIsSubmitting(true)
+
+    try {
+      await onSubmit({
+        name: name.trim(),
+        path: projectType === 'local' ? path.trim() : undefined,
+        remoteUrl: projectType === 'remote' ? remoteUrl.trim() : undefined,
+      })
+      // Success - modal will be closed by parent
+    } catch (error) {
+      // Show server-side validation errors
+      if (error instanceof Error) {
+        const errorMsg = error.message
+
+        // Try to categorize the error for better UX
+        // Check for conflict errors first (these should be submit errors, not field errors)
+        if (errorMsg.includes('already exists')) {
+          setSubmitError(errorMsg)
+        } else if (errorMsg.includes('path') || errorMsg.includes('directory') || errorMsg.includes('chronicle.yaml')) {
+          setErrors((prev) => ({ ...prev, path: errorMsg }))
+        } else if (errorMsg.includes('url') || errorMsg.includes('URL')) {
+          setErrors((prev) => ({ ...prev, remoteUrl: errorMsg }))
+        } else if (errorMsg.includes('name')) {
+          setErrors((prev) => ({ ...prev, name: errorMsg }))
+        } else {
+          // General error
+          setSubmitError(errorMsg)
+        }
+      } else {
+        setSubmitError('An unexpected error occurred. Please try again.')
+      }
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleClose = () => {
-    if (!loading) {
+    if (!loading && !isSubmitting) {
       onClose()
     }
   }
+
+  const effectiveLoading = loading || isSubmitting
 
   return (
     <Modal
@@ -128,6 +164,19 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
       className="max-w-md"
     >
       <form onSubmit={handleSubmit} className="px-6 pb-6">
+        {/* Server Error Display */}
+        {submitError && (
+          <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 p-3">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-destructive">Failed to add project</p>
+                <p className="text-sm text-destructive/80 mt-1">{submitError}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Project Type Selection */}
         <div className="mb-6">
           <label className="block text-sm font-medium mb-3">Project Type</label>
@@ -173,9 +222,15 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
                 type="text"
                 placeholder="/path/to/your/project"
                 value={path}
-                onChange={(e) => setPath(e.target.value)}
+                onChange={(e) => {
+                  setPath(e.target.value)
+                  // Clear server-side error when user edits
+                  if (errors.path) {
+                    setErrors((prev) => ({ ...prev, path: undefined }))
+                  }
+                }}
                 onBlur={() => setTouched((t) => ({ ...t, path: true }))}
-                disabled={loading}
+                disabled={effectiveLoading}
                 aria-describedby={errors.path ? 'path-error' : undefined}
                 aria-invalid={errors.path && touched.path ? true : undefined}
                 className={cn(errors.path && touched.path && 'border-destructive')}
@@ -199,9 +254,15 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
                 type="url"
                 placeholder="https://chronicle.example.com:8080"
                 value={remoteUrl}
-                onChange={(e) => setRemoteUrl(e.target.value)}
+                onChange={(e) => {
+                  setRemoteUrl(e.target.value)
+                  // Clear server-side error when user edits
+                  if (errors.remoteUrl) {
+                    setErrors((prev) => ({ ...prev, remoteUrl: undefined }))
+                  }
+                }}
                 onBlur={() => setTouched((t) => ({ ...t, remoteUrl: true }))}
-                disabled={loading}
+                disabled={effectiveLoading}
                 aria-describedby={errors.remoteUrl ? 'url-error' : undefined}
                 aria-invalid={errors.remoteUrl && touched.remoteUrl ? true : undefined}
                 className={cn(errors.remoteUrl && touched.remoteUrl && 'border-destructive')}
@@ -231,9 +292,13 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
             onChange={(e) => {
               setName(e.target.value)
               setTouched((t) => ({ ...t, name: true }))
+              // Clear server-side error when user edits
+              if (errors.name) {
+                setErrors((prev) => ({ ...prev, name: undefined }))
+              }
             }}
             onBlur={() => setTouched((t) => ({ ...t, name: true }))}
-            disabled={loading}
+            disabled={effectiveLoading}
             aria-describedby={errors.name ? 'name-error' : undefined}
             aria-invalid={errors.name && touched.name ? true : undefined}
             className={cn(errors.name && touched.name && 'border-destructive')}
@@ -256,12 +321,12 @@ export function AddProjectModal({ open, onClose, onSubmit, loading = false }: Ad
             type="button"
             variant="outline"
             onClick={handleClose}
-            disabled={loading}
+            disabled={effectiveLoading}
           >
             Cancel
           </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? 'Adding...' : 'Add Project'}
+          <Button type="submit" disabled={effectiveLoading}>
+            {effectiveLoading ? 'Adding...' : 'Add Project'}
           </Button>
         </div>
       </form>

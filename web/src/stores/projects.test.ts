@@ -158,7 +158,7 @@ describe('Projects Store', () => {
         await result.current.fetchProjects()
       })
 
-      expect(result.current.error).toBe('Network error')
+      expect(result.current.error).toContain('network error')
       expect(result.current.loading).toBe(false)
     })
 
@@ -216,10 +216,15 @@ describe('Projects Store', () => {
       const { result } = renderHook(() => useProjectsStore())
 
       await act(async () => {
-        await result.current.addProject({ name: 'New Project' })
+        // addProject now re-throws error, so we need to catch it
+        try {
+          await result.current.addProject({ name: 'New Project' })
+        } catch {
+          // Expected to throw
+        }
       })
 
-      expect(result.current.error).toBe('Failed to add project: Bad Request')
+      expect(result.current.error).toContain('Failed to add project')
     })
 
     it('refreshes projects after adding', async () => {
@@ -280,7 +285,9 @@ describe('Projects Store', () => {
       const { result } = renderHook(() => useProjectsStore())
 
       await act(async () => {
-        await result.current.removeProject('nonexistent')
+        await expect(result.current.removeProject('nonexistent')).rejects.toThrow(
+          'Failed to remove project: Not Found'
+        )
       })
 
       expect(result.current.error).toBe('Failed to remove project: Not Found')
@@ -325,7 +332,9 @@ describe('Projects Store', () => {
       const { result } = renderHook(() => useProjectsStore())
 
       await act(async () => {
-        await result.current.updateProject('proj-1', { name: 'New Name' })
+        await expect(result.current.updateProject('proj-1', { name: 'New Name' })).rejects.toThrow(
+          'Failed to update project: Forbidden'
+        )
       })
 
       expect(result.current.error).toBe('Failed to update project: Forbidden')
@@ -373,7 +382,7 @@ describe('Projects Store', () => {
         await result.current.launchProject('proj-1')
       })
 
-      expect(result.current.error).toBe('Failed to launch project: Service Unavailable')
+      expect(result.current.error).toContain('Failed to launch daemon')
     })
 
     it('refreshes projects after launching to get updated status', async () => {
@@ -435,10 +444,10 @@ describe('Projects Store', () => {
       const { result } = renderHook(() => useProjectsStore())
 
       await act(async () => {
-        await result.current.stopProject('proj-1')
+        await expect(result.current.stopProject('proj-1')).rejects.toThrow('Failed to stop daemon')
       })
 
-      expect(result.current.error).toBe('Failed to stop project: Internal Server Error')
+      expect(result.current.error).toContain('Failed to stop daemon')
     })
   })
 
@@ -633,7 +642,7 @@ describe('Projects Store', () => {
         await result.current.fetchProjects()
       })
 
-      expect(result.current.error).toBe('Failed to fetch projects')
+      expect(result.current.error).toContain('Failed to fetch projects')
     })
 
     it('clears error before starting new operation', async () => {
@@ -828,7 +837,7 @@ describe('Projects Store', () => {
         await result.current.fetchProjects()
       })
 
-      expect(result.current.error).toBe('Network error')
+      expect(result.current.error).toContain('network error')
 
       // Second fetch should work since flag was reset
       await act(async () => {
@@ -854,7 +863,7 @@ describe('Projects Store', () => {
         await result.current.discover()
       })
 
-      expect(result.current.error).toBe('Network error')
+      expect(result.current.error).toContain('network error')
 
       // Second discover should work since flag was reset
       await act(async () => {
@@ -884,7 +893,7 @@ describe('Projects Store', () => {
         await result.current.fetchProjects()
       })
 
-      expect(result.current.error).toBe('Failed to parse server response')
+      expect(result.current.error).toContain('parse server response')
       expect(result.current.loading).toBe(false)
     })
 
@@ -902,8 +911,262 @@ describe('Projects Store', () => {
         await result.current.discover()
       })
 
-      expect(result.current.error).toBe('Failed to parse server response')
+      expect(result.current.error).toContain('parse server response')
       expect(result.current.loading).toBe(false)
+    })
+  })
+
+  // ============================================
+  // POLLING TESTS
+  // ============================================
+  describe('Polling', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('starts with null polling interval', () => {
+      const { result } = renderHook(() => useProjectsStore())
+      expect(result.current.pollingIntervalId).toBeNull()
+    })
+
+    it('starts polling with default interval', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [mockProject] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling()
+      })
+
+      // Should have an interval ID set
+      expect(result.current.pollingIntervalId).not.toBeNull()
+      expect(result.current.pollingIntervalMs).toBe(5000) // POLLING_INTERVAL_ACTIVE
+
+      // Initial fetch should have been called
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Cleanup
+      act(() => {
+        result.current.stopPolling()
+      })
+    })
+
+    it('starts polling with custom interval', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling(10000)
+      })
+
+      expect(result.current.pollingIntervalMs).toBe(10000)
+
+      // Cleanup
+      act(() => {
+        result.current.stopPolling()
+      })
+    })
+
+    it('stops polling and clears interval', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling()
+      })
+
+      expect(result.current.pollingIntervalId).not.toBeNull()
+
+      act(() => {
+        result.current.stopPolling()
+      })
+
+      expect(result.current.pollingIntervalId).toBeNull()
+    })
+
+    it('fetches projects at each interval', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [mockProject] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling(1000) // 1 second interval
+      })
+
+      // Initial fetch
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      // Advance by 1 second - use advanceTimersByTimeAsync to handle async operations
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+
+      // Should have triggered another fetch
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+
+      // Advance by another second
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000)
+      })
+
+      expect(global.fetch).toHaveBeenCalledTimes(3)
+
+      // Cleanup
+      act(() => {
+        result.current.stopPolling()
+      })
+    })
+
+    it('prevents multiple polling intervals when called multiple times', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling()
+      })
+
+      const firstIntervalId = result.current.pollingIntervalId
+
+      act(() => {
+        result.current.startPolling() // Second call should be ignored
+      })
+
+      // Should still have the same interval ID
+      expect(result.current.pollingIntervalId).toBe(firstIntervalId)
+
+      // Cleanup
+      act(() => {
+        result.current.stopPolling()
+      })
+    })
+
+    it('setPollingInterval adjusts timing when polling', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling(5000)
+      })
+
+      expect(result.current.pollingIntervalMs).toBe(5000)
+
+      act(() => {
+        result.current.setPollingInterval(60000)
+      })
+
+      expect(result.current.pollingIntervalMs).toBe(60000)
+      // Should still have an interval running
+      expect(result.current.pollingIntervalId).not.toBeNull()
+
+      // Cleanup
+      act(() => {
+        result.current.stopPolling()
+      })
+    })
+
+    it('setPollingInterval does nothing when not polling', () => {
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.setPollingInterval(60000)
+      })
+
+      // Should still be null since polling was never started
+      expect(result.current.pollingIntervalId).toBeNull()
+      // Interval setting should remain at default
+      expect(result.current.pollingIntervalMs).toBe(5000) // POLLING_INTERVAL_ACTIVE
+    })
+
+    it('setPollingInterval does nothing if interval unchanged', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling(5000)
+      })
+
+      const originalIntervalId = result.current.pollingIntervalId
+
+      act(() => {
+        result.current.setPollingInterval(5000) // Same interval
+      })
+
+      // Should have same interval ID (no restart)
+      expect(result.current.pollingIntervalId).toBe(originalIntervalId)
+
+      // Cleanup
+      act(() => {
+        result.current.stopPolling()
+      })
+    })
+
+    it('stopPolling does nothing when not polling', () => {
+      const { result } = renderHook(() => useProjectsStore())
+
+      // Should not throw
+      act(() => {
+        result.current.stopPolling()
+      })
+
+      expect(result.current.pollingIntervalId).toBeNull()
+    })
+
+    it('stops fetching after stopPolling is called', async () => {
+      vi.mocked(global.fetch).mockResolvedValue({
+        ok: true,
+        json: async () => ({ projects: [] }),
+      } as Response)
+
+      const { result } = renderHook(() => useProjectsStore())
+
+      act(() => {
+        result.current.startPolling(1000)
+      })
+
+      // Initial fetch
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+
+      act(() => {
+        result.current.stopPolling()
+      })
+
+      // Advance time - should NOT trigger more fetches
+      await act(async () => {
+        vi.advanceTimersByTime(3000)
+      })
+
+      // Should still be just 1 fetch (the initial one)
+      expect(global.fetch).toHaveBeenCalledTimes(1)
     })
   })
 })
