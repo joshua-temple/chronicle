@@ -35,15 +35,14 @@ func spaHandler(fsys fs.FS) http.Handler {
 			path = "index.html"
 		}
 
-		// Try to open the file
-		f, err := fsys.Open(path)
+		// Check if file exists using Stat (avoids opening file descriptor)
+		_, err := fs.Stat(fsys, path)
 		if err != nil {
 			// File not found - serve index.html for SPA routing
 			r.URL.Path = "/"
 			fileServer.ServeHTTP(w, r)
 			return
 		}
-		_ = f.Close()
 
 		// File exists, serve it
 		fileServer.ServeHTTP(w, r)
