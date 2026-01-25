@@ -1,8 +1,19 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, PlayCircle, History, FileText, Boxes } from 'lucide-react'
+import { LayoutDashboard, PlayCircle, History, FileText, Boxes, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { AppMode } from '@/stores/mode'
 
-const navItems = [
+interface SidebarProps {
+  mode: AppMode
+}
+
+const STANDALONE_NAV = [
+  { to: '/config', icon: Settings, label: 'Config' },
+  { to: '/scenarios', icon: FileText, label: 'Scenarios' },
+  { to: '/components', icon: Boxes, label: 'Components' },
+]
+
+const DAEMON_NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/scenarios', icon: PlayCircle, label: 'Scenarios' },
   { to: '/runs', icon: History, label: 'Runs' },
@@ -10,7 +21,8 @@ const navItems = [
   { to: '/components', icon: Boxes, label: 'Components' },
 ]
 
-export function Sidebar() {
+export function Sidebar({ mode }: SidebarProps) {
+  const navItems = mode === 'standalone' ? STANDALONE_NAV : DAEMON_NAV
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-card">
       <div className="flex h-16 items-center border-b border-border px-6">
