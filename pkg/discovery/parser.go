@@ -100,6 +100,10 @@ func (p *Parser) scanDirectory(dir string, registry *Registry) error {
 		// Skip hidden directories and vendor
 		if info.IsDir() {
 			name := info.Name()
+			// Don't skip the root directory "." or "./"
+			if name == "." {
+				return nil
+			}
 			if strings.HasPrefix(name, ".") || name == "vendor" || name == "testdata" {
 				return filepath.SkipDir
 			}

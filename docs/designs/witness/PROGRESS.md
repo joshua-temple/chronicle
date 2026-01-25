@@ -6,11 +6,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | 1 (Core Framework) |
-| **Current Step** | 1.1 |
-| **Status** | in_progress |
+| **Current Phase** | 2 (Configuration & Scenarios) |
+| **Current Step** | 2.1 |
+| **Status** | starting |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | ad7824f |
+| **Last Commit** | (pending commit for Phase 1.6) |
 
 ## Phase Checklist
 
@@ -20,28 +20,28 @@
 - [x] 0.3 Create directory structure
 
 ### Phase 1: Core Framework
-- [ ] 1.1 Typed Identifiers (`pkg/witness/core/identifiers.go`)
-- [ ] 1.2 Component Types (`pkg/witness/core/components.go`)
-- [ ] 1.3 Context Implementation (`pkg/witness/context/context.go`)
-- [ ] 1.4 Annotation Discovery (`pkg/witness/discovery/`)
-- [ ] 1.5 Middleware System (`pkg/witness/middleware/`)
-- [ ] 1.6 Basic Example (`examples/basic/`)
+- [x] 1.1 Typed Identifiers (`pkg/core/identifiers.go`) - commit: 8a72372
+- [x] 1.2 Component Types (`pkg/core/components.go`) - commit: c4df3b6
+- [x] 1.3 Context Implementation (`pkg/context/context.go`) - commit: 880e96b
+- [x] 1.4 Annotation Discovery (`pkg/discovery/`) - commit: 70da8a1
+- [x] 1.5 Middleware System (`pkg/middleware/`) - commit: 7cfff37
+- [x] 1.6 Basic Example (`examples/basic/`) - commit: pending
 
 ### Phase 2: Configuration & Scenarios
-- [ ] 2.1 YAML Configuration (`pkg/witness/config/`)
-- [ ] 2.2 Scenario Model (`pkg/witness/scenario/`)
-- [ ] 2.3 Conditional Execution (`pkg/witness/scenario/conditions.go`)
+- [ ] 2.1 YAML Configuration (`pkg/config/`)
+- [ ] 2.2 Scenario Model (`pkg/scenario/`)
+- [ ] 2.3 Conditional Execution (`pkg/scenario/conditions.go`)
 - [ ] 2.4 Scenario Example
 
 ### Phase 3: Infrastructure
-- [ ] 3.1 Provider Interface (`pkg/witness/infrastructure/provider.go`)
+- [ ] 3.1 Provider Interface (`pkg/infrastructure/provider.go`)
 - [ ] 3.2 TestContainers Provider
 - [ ] 3.3 Secret Management
 - [ ] 3.4 Reuse Behavior
 - [ ] 3.5 Infrastructure Example
 
 ### Phase 4: Execution Engine
-- [ ] 4.1 Executor (`pkg/witness/execution/executor.go`)
+- [ ] 4.1 Executor (`pkg/execution/executor.go`)
 - [ ] 4.2 Timeout Handling
 - [ ] 4.3 Teardown Handling
 - [ ] 4.4 Runner Integration
@@ -82,13 +82,19 @@ None.
 
 ## Next Action
 
-**Start Phase 1.1:** Implement typed identifiers in `pkg/core/identifiers.go`
+**Start Phase 2.1:** Implement YAML configuration loader in `pkg/config/`
 
 ## Commit Log
 
 | Phase | Step | Commit | Description |
 |-------|------|--------|-------------|
 | 0 | 0.1-0.3 | ad7824f | Initialize chronicle project structure |
+| 1 | 1.1 | 8a72372 | Add typed identifiers and ID registry |
+| 1 | 1.2 | c4df3b6 | Add component type definitions |
+| 1 | 1.3 | 880e96b | Implement typed context with generics |
+| 1 | 1.4 | 70da8a1 | Implement AST-based annotation parser |
+| 1 | 1.5 | 7cfff37 | Implement composable middleware system |
+| 1 | 1.6 | (pending) | Create basic example with tests |
 
 ## Context Restoration Notes
 
