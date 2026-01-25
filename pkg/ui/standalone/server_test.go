@@ -521,10 +521,13 @@ func TestServerStartStop(t *testing.T) {
 		t.Fatalf("failed to create registry: %v", err)
 	}
 
-	srv := NewServer(
+	srv, err := NewServer(
 		WithPort(0), // use random port
 		WithRegistry(registry),
 	)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -568,10 +571,13 @@ func TestWithOptions(t *testing.T) {
 		t.Fatalf("failed to create registry: %v", err)
 	}
 
-	srv := NewServer(
+	srv, err := NewServer(
 		WithPort(9999),
 		WithRegistry(registry),
 	)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
 
 	if srv.port != 9999 {
 		t.Errorf("expected port 9999, got %d", srv.port)
@@ -601,11 +607,15 @@ func setupTestServer(t *testing.T) *Server {
 		},
 	}
 
-	return NewServer(
+	srv, err := NewServer(
 		WithPort(0),
 		WithRegistry(registry),
 		WithWebFS(testFS),
 	)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	return srv
 }
 
 // setupTestServerWithFS creates a test server with a custom filesystem.
@@ -620,9 +630,13 @@ func setupTestServerWithFS(t *testing.T, webFS fs.FS) *Server {
 		t.Fatalf("failed to create registry: %v", err)
 	}
 
-	return NewServer(
+	srv, err := NewServer(
 		WithPort(0),
 		WithRegistry(registry),
 		WithWebFS(webFS),
 	)
+	if err != nil {
+		t.Fatalf("failed to create server: %v", err)
+	}
+	return srv
 }

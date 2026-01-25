@@ -55,7 +55,8 @@ func WithWebFS(webFS fs.FS) ServerOption {
 // NewServer creates a new standalone server with the given options.
 // If no registry is provided, it creates one at ~/.chronicle/projects.json.
 // If no web FS is provided, it uses the embedded web.WebFS.
-func NewServer(opts ...ServerOption) *Server {
+// Returns an error if the default registry cannot be created.
+func NewServer(opts ...ServerOption) (*Server, error) {
 	s := &Server{
 		port:  8080, // default port
 		webFS: web.WebFS,
@@ -71,12 +72,12 @@ func NewServer(opts ...ServerOption) *Server {
 	if s.registry == nil {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			panic(fmt.Errorf("failed to get home directory: %w", err))
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
 		}
 		registryPath := filepath.Join(homeDir, ".chronicle", "projects.json")
 		registry, err := NewRegistry(registryPath)
 		if err != nil {
-			panic(fmt.Errorf("failed to create registry: %w", err))
+			return nil, fmt.Errorf("failed to create registry: %w", err)
 		}
 		s.registry = registry
 	}
@@ -88,7 +89,7 @@ func NewServer(opts ...ServerOption) *Server {
 	// Set up routes
 	s.setupRoutes()
 
-	return s
+	return s, nil
 }
 
 // Start starts the HTTP server and blocks until the context is canceled or an error occurs.
@@ -243,10 +244,8 @@ func (s *Server) handleRemoveProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Stop daemon if running
-	if s.launcher.IsRunning(id) {
-		_ = s.launcher.Stop(r.Context(), id)
-	}
+	// Stop any running daemon - ignore error if not running
+	_ = s.launcher.Stop(r.Context(), id)
 
 	if err := s.registry.Remove(id); err != nil {
 		s.jsonError(w, http.StatusInternalServerError, err.Error())
@@ -464,7 +463,10 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.Copy(w, indexFile)
+		if _, err := io.Copy(w, indexFile); err != nil {
+			// Connection closed or other issue - nothing we can do at this point
+			return
+		}
 		return
 	}
 	defer func() {
@@ -485,7 +487,10 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = io.Copy(w, indexFile)
+		if _, err := io.Copy(w, indexFile); err != nil {
+			// Connection closed or other issue - nothing we can do at this point
+			return
+		}
 		return
 	}
 
@@ -493,7 +498,10 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 	contentType := getContentType(path)
 	w.Header().Set("Content-Type", contentType)
 
-	_, _ = io.Copy(w, file)
+	if _, err := io.Copy(w, file); err != nil {
+		// Connection closed or other issue - nothing we can do at this point
+		return
+	}
 }
 
 // getContentType returns the MIME type based on file extension.
@@ -522,6 +530,9 @@ func getContentType(path string) string {
 }
 
 // setCORSHeaders sets CORS headers for development.
+// Note: Using Access-Control-Allow-Origin: * is acceptable for standalone mode
+// because this is a local development tool running on localhost. The server
+// is not exposed to the internet and only serves local Chronicle projects.
 func (s *Server) setCORSHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
