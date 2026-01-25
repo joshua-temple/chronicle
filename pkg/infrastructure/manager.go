@@ -13,6 +13,7 @@ type Manager struct {
 	providers map[string]Provider
 	configs   map[string]ProviderConfig
 	registry  *Registry
+	endpoints *EndpointRegistry
 	reuse     ReuseBehavior
 	isolation IsolationLevel
 	started   bool
@@ -27,6 +28,7 @@ func NewManager(registry *Registry) *Manager {
 		providers: make(map[string]Provider),
 		configs:   make(map[string]ProviderConfig),
 		registry:  registry,
+		endpoints: NewEndpointRegistry(),
 		reuse:     ReuseWithFlush,
 		isolation: DataIsolation,
 	}
@@ -284,4 +286,14 @@ func (m *Manager) IsStarted() bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.started
+}
+
+// Endpoints returns the endpoint registry.
+func (m *Manager) Endpoints() *EndpointRegistry {
+	return m.endpoints
+}
+
+// Endpoint retrieves an endpoint by name.
+func (m *Manager) Endpoint(name string) (Endpoint, bool) {
+	return m.endpoints.Get(name)
 }
