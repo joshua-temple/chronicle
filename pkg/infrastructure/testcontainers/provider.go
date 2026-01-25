@@ -24,12 +24,13 @@ type ContainerConfig struct {
 
 // ContainerProvider is a base provider for testcontainers-based infrastructure.
 type ContainerProvider struct {
-	name      string
-	container testcontainers.Container
-	config    ContainerConfig
-	mu        sync.RWMutex
-	status    atomic.Int32
-	clients   map[string]any
+	name        string
+	container   testcontainers.Container
+	config      ContainerConfig
+	mu          sync.RWMutex
+	status      atomic.Int32
+	clients     map[string]any
+	networkName string
 }
 
 // NewContainerProvider creates a new container provider.
@@ -102,6 +103,14 @@ func (p *ContainerProvider) Start(ctx context.Context) error {
 		ExposedPorts: p.config.ExposedPorts,
 		Env:          p.config.Env,
 		WaitingFor:   p.config.WaitFor,
+	}
+
+	// Join shared network if configured
+	if p.networkName != "" {
+		req.Networks = []string{p.networkName}
+		req.NetworkAliases = map[string][]string{
+			p.networkName: {p.name},
+		}
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
@@ -263,4 +272,18 @@ func (p *ContainerProvider) MappedPort(ctx context.Context, port string) (string
 	}
 
 	return mappedPort.Port(), nil
+}
+
+// SetNetwork sets the Docker network for this provider to join.
+func (p *ContainerProvider) SetNetwork(networkName string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.networkName = networkName
+}
+
+// Network returns the current network name.
+func (p *ContainerProvider) Network() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.networkName
 }

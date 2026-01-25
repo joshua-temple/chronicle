@@ -356,3 +356,28 @@ func TestProviderRegistration(t *testing.T) {
 		}
 	})
 }
+
+func TestContainerProvider_ImplementsNetworkAwareProvider(t *testing.T) {
+	p := NewContainerProvider("test")
+
+	// Verify it implements NetworkAwareProvider
+	var _ infrastructure.NetworkAwareProvider = p
+}
+
+func TestContainerProvider_SetNetwork(t *testing.T) {
+	p := NewContainerProvider("test")
+
+	p.SetNetwork("my-network")
+
+	if p.Network() != "my-network" {
+		t.Errorf("Network() = %q, want %q", p.Network(), "my-network")
+	}
+}
+
+func TestContainerProvider_NetworkEmptyByDefault(t *testing.T) {
+	p := NewContainerProvider("test")
+
+	if p.Network() != "" {
+		t.Errorf("Network() = %q, want empty", p.Network())
+	}
+}
