@@ -91,6 +91,7 @@ type Context interface {
 
 	// Infrastructure clients
 	Client(name string) (any, error)
+	RegisterClient(name string, client any)
 
 	// Endpoint returns infrastructure endpoint info by name.
 	Endpoint(name string) (infrastructure.Endpoint, bool)
@@ -410,7 +411,8 @@ func (c *contextImpl) SetPartialResults(results map[string]any) {
 	c.partial = results
 }
 
-// RegisterClient registers a client directly (for testing).
+// RegisterClient registers a custom client that can be retrieved via Client().
+// Registered clients take precedence over clients from the provider.
 func (c *contextImpl) RegisterClient(name string, client any) {
 	c.clients[name] = client
 }

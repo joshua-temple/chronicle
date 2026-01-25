@@ -552,3 +552,76 @@ func TestContext_Endpoint(t *testing.T) {
 		}
 	})
 }
+
+func TestContext_RegisterClient(t *testing.T) {
+	ctx := New(context.Background())
+
+	type MyClient struct{ Name string }
+	client := &MyClient{Name: "test-client"}
+
+	ctx.RegisterClient("my-service", client)
+
+	got, err := ctx.Client("my-service")
+	if err != nil {
+		t.Fatalf("Client() error = %v", err)
+	}
+
+	gotClient, ok := got.(*MyClient)
+	if !ok {
+		t.Fatalf("Client() returned wrong type: %T", got)
+	}
+
+	if gotClient.Name != "test-client" {
+		t.Errorf("Client().Name = %q, want %q", gotClient.Name, "test-client")
+	}
+}
+
+func TestContext_Client_NotFound(t *testing.T) {
+	ctx := New(context.Background())
+
+	_, err := ctx.Client("nonexistent")
+	if err == nil {
+		t.Error("Client() should return error for nonexistent client")
+	}
+}
+
+func TestContext_Client_FallsBackToProvider(t *testing.T) {
+	providerCalled := false
+	provider := func(name string) (any, error) {
+		providerCalled = true
+		return "from-provider", nil
+	}
+
+	ctx := New(context.Background(), WithClientProvider(provider))
+
+	got, err := ctx.Client("infra-client")
+	if err != nil {
+		t.Fatalf("Client() error = %v", err)
+	}
+
+	if !providerCalled {
+		t.Error("Client() should fall back to provider")
+	}
+
+	if got != "from-provider" {
+		t.Errorf("Client() = %v, want %q", got, "from-provider")
+	}
+}
+
+func TestContext_RegisterClient_OverridesProvider(t *testing.T) {
+	provider := func(name string) (any, error) {
+		return "from-provider", nil
+	}
+
+	ctx := New(context.Background(), WithClientProvider(provider))
+	ctx.RegisterClient("my-service", "custom-client")
+
+	got, err := ctx.Client("my-service")
+	if err != nil {
+		t.Fatalf("Client() error = %v", err)
+	}
+
+	if got != "custom-client" {
+		t.Errorf("Client() = %v, want %q (registered should override provider)", got, "custom-client")
+	}
+}
