@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -117,17 +118,18 @@ func TestServer_Start(t *testing.T) {
 		// Wait for server to start
 		time.Sleep(100 * time.Millisecond)
 
-		// Test all API routes
+		// Test all API routes - expected status varies by endpoint behavior
 		routes := []struct {
-			method string
-			path   string
+			method         string
+			path           string
+			expectedStatus int
 		}{
-			{"GET", "/api/local/project"},
-			{"GET", "/api/local/config"},
-			{"PUT", "/api/local/config"},
-			{"POST", "/api/local/config/validate"},
-			{"POST", "/api/local/discover"},
-			{"GET", "/api/local/components"},
+			{"GET", "/api/local/project", http.StatusOK},
+			{"GET", "/api/local/config", http.StatusNotFound},  // No config file in default dir
+			{"PUT", "/api/local/config", http.StatusBadRequest}, // Empty body is invalid
+			{"POST", "/api/local/config/validate", http.StatusOK},
+			{"POST", "/api/local/discover", http.StatusOK},
+			{"GET", "/api/local/components", http.StatusOK},
 		}
 
 		client := &http.Client{Timeout: 5 * time.Second}
@@ -146,8 +148,8 @@ func TestServer_Start(t *testing.T) {
 				}
 				defer func() { _ = resp.Body.Close() }()
 
-				if resp.StatusCode != http.StatusOK {
-					t.Errorf("expected status 200, got %d", resp.StatusCode)
+				if resp.StatusCode != route.expectedStatus {
+					t.Errorf("expected status %d, got %d", route.expectedStatus, resp.StatusCode)
 				}
 
 				contentType := resp.Header.Get("Content-Type")
@@ -220,5 +222,158 @@ func TestServer_HandleProject(t *testing.T) {
 
 	if info2.ConfigExists {
 		t.Error("expected config to not exist")
+	}
+}
+
+func TestServer_HandleGetConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	configContent := `version: "1"
+scenarios:
+  - name: test
+    flow:
+      - setup: Setup
+`
+	if err := os.WriteFile(filepath.Join(tmpDir, "chronicle.yaml"), []byte(configContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(WithDir(tmpDir))
+	req := httptest.NewRequest("GET", "/api/local/config", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestServer_HandleGetConfig_NotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := New(WithDir(tmpDir))
+	req := httptest.NewRequest("GET", "/api/local/config", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
+func TestServer_HandleValidateConfig(t *testing.T) {
+	s := New()
+	body := `{"version": "1"}`
+	req := httptest.NewRequest("POST", "/api/local/config/validate", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var result ValidationResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	if !result.Valid {
+		t.Errorf("expected valid config, got errors: %v", result.Errors)
+	}
+}
+
+func TestServer_HandleValidateConfig_Invalid(t *testing.T) {
+	s := New()
+	body := `{"scenarios": [{"name": ""}]}`
+	req := httptest.NewRequest("POST", "/api/local/config/validate", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var result ValidationResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Valid {
+		t.Error("expected invalid config")
+	}
+	if len(result.Errors) == 0 {
+		t.Error("expected validation errors")
+	}
+}
+
+func TestServer_HandleValidateConfig_InvalidJSON(t *testing.T) {
+	s := New()
+	body := `{invalid json}`
+	req := httptest.NewRequest("POST", "/api/local/config/validate", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var result ValidationResult
+	if err := json.NewDecoder(w.Body).Decode(&result); err != nil {
+		t.Fatal(err)
+	}
+
+	if result.Valid {
+		t.Error("expected invalid config")
+	}
+	if len(result.Errors) == 0 {
+		t.Error("expected errors for invalid JSON")
+	}
+}
+
+func TestServer_HandlePutConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := New(WithDir(tmpDir))
+
+	// Valid config with at least one scenario that has a flow
+	body := `{"version": "1", "scenarios": [{"name": "test-scenario", "flow": [{"setup": "TestSetup"}]}]}`
+	req := httptest.NewRequest("PUT", "/api/local/config", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Verify file was written
+	configPath := filepath.Join(tmpDir, "chronicle.yaml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Error("config file was not created")
+	}
+}
+
+func TestServer_HandlePutConfig_InvalidJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := New(WithDir(tmpDir))
+
+	body := `{invalid json}`
+	req := httptest.NewRequest("PUT", "/api/local/config", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+}
+
+func TestServer_HandlePutConfig_ValidationFailed(t *testing.T) {
+	tmpDir := t.TempDir()
+	s := New(WithDir(tmpDir))
+
+	// Invalid config: scenario without name
+	body := `{"scenarios": [{"name": ""}]}`
+	req := httptest.NewRequest("PUT", "/api/local/config", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }

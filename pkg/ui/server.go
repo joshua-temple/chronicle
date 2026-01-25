@@ -189,24 +189,6 @@ func (s *Server) devModeHandler() http.Handler {
 
 // API Handler placeholders
 
-// handleGetConfig returns the Chronicle configuration.
-func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder - will be implemented in a later task
-	writeJSON(w, http.StatusOK, map[string]any{})
-}
-
-// handlePutConfig updates the Chronicle configuration.
-func (s *Server) handlePutConfig(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder - will be implemented in a later task
-	writeJSON(w, http.StatusOK, map[string]any{})
-}
-
-// handleValidateConfig validates a configuration.
-func (s *Server) handleValidateConfig(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder - will be implemented in a later task
-	writeJSON(w, http.StatusOK, map[string]any{"valid": true})
-}
-
 // handleDiscover runs component discovery.
 func (s *Server) handleDiscover(w http.ResponseWriter, _ *http.Request) {
 	// Placeholder - will be implemented in a later task
