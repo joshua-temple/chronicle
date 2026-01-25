@@ -39,6 +39,14 @@ type InfraConfig struct {
 	Reuse       ReuseConfig       `yaml:"reuse,omitempty" json:"reuse,omitempty"`
 	DependsOn   []string          `yaml:"depends_on,omitempty" json:"depends_on,omitempty"`
 	Resources   ResourcesConfig   `yaml:"resources,omitempty" json:"resources,omitempty"`
+
+	// ComposeFile references an existing docker-compose.yml file.
+	// When set, Chronicle uses TestContainers' compose support instead of individual containers.
+	ComposeFile string `yaml:"compose_file,omitempty" json:"compose_file,omitempty"`
+
+	// Services filters which services to start from the compose file.
+	// If empty, all services are started.
+	Services []string `yaml:"services,omitempty" json:"services,omitempty"`
 }
 
 // PortConfig configures a port mapping.
