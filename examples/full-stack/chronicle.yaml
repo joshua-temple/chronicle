@@ -298,11 +298,15 @@ scenarios:
       - task: InitiateCheckout
       - task: ProcessPayment
       - validation: VerifyOrderCreated
-      - parallel:
-          - validation: VerifyInventoryDeducted
-          - validation: VerifyPaymentRecorded
-          - validation: VerifyOrderEventPublished
-          - validation: VerifyAnalyticsTracked
+      # These validations can run in parallel
+      - validation: VerifyInventoryDeducted
+        parallel: true
+      - validation: VerifyPaymentRecorded
+        parallel: true
+      - validation: VerifyOrderEventPublished
+        parallel: true
+      - validation: VerifyAnalyticsTracked
+        parallel: true
     teardown:
       - teardown: CleanupTestOrder
       - teardown: CleanupTestUser
