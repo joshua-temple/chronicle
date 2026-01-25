@@ -10,26 +10,41 @@ export interface ProjectInfo {
 }
 
 export interface ChronicleConfig {
+  name?: string
   version: string
   scenarios?: ScenarioConfig[]
-  infrastructure?: InfrastructureConfig
-  chaos?: Record<string, ChaosProfile>
-  mocks?: Record<string, MockProfile>
+  infrastructure?: Record<string, unknown>
+  chaos_profiles?: Record<string, ChaosProfile>
+  mock_profiles?: Record<string, MockProfile>
+  flags?: Record<string, unknown>
+  execution?: Record<string, unknown>
+  results?: Record<string, unknown>
 }
 
 export interface ScenarioConfig {
   name: string
   description?: string
   tags?: string[]
-  timeout?: string
-  parallel?: number
-  flow: ConfigFlowStep[]
+  timeout?: number // Duration in nanoseconds
+  flow?: FlowItemConfig[]
+  teardown?: FlowItemConfig[]
+  abstract?: boolean
+  extends?: string
+  chaos_profiles?: string[]
+  mock_profiles?: string[]
 }
 
-export interface ConfigFlowStep {
-  component: string
-  timeout?: string
-  condition?: string
+export interface FlowItemConfig {
+  setup?: string
+  task?: string
+  validation?: string
+  step?: string
+  rollup?: string
+  teardown?: string
+  timeout?: number
+  depends_on?: string[]
+  params?: Record<string, unknown>
+  parallel?: boolean
 }
 
 export interface InfrastructureConfig {

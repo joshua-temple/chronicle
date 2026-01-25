@@ -158,30 +158,35 @@ export function ConfigEditor() {
           )}
           {activeTab === 'infrastructure' && (
             <div className="space-y-4">
-              {currentConfig.infrastructure?.providers?.map((provider, i) => (
-                <Card key={i}>
-                  <CardHeader className="py-3">
-                    <CardTitle className="text-base">{provider.name}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-3">
-                    <p className="text-sm text-muted-foreground">Type: {provider.type}</p>
-                  </CardContent>
-                </Card>
-              )) || <p className="text-muted-foreground">No infrastructure providers configured</p>}
-            </div>
-          )}
-          {activeTab === 'chaos' && (
-            <div className="space-y-4">
-              {currentConfig.chaos && Object.keys(currentConfig.chaos).length > 0 ? (
-                Object.entries(currentConfig.chaos).map(([name, profile]) => (
+              {currentConfig.infrastructure && Object.keys(currentConfig.infrastructure).length > 0 ? (
+                Object.entries(currentConfig.infrastructure).map(([name, config]) => (
                   <Card key={name}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base">{name}</CardTitle>
                     </CardHeader>
                     <CardContent className="py-3">
                       <p className="text-sm text-muted-foreground">
-                        {profile.infrastructure?.length || 0} infrastructure rules,{' '}
-                        {profile.application?.length || 0} application rules
+                        {typeof config === 'object' ? JSON.stringify(config).slice(0, 100) : String(config)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <p className="text-muted-foreground">No infrastructure providers configured</p>
+              )}
+            </div>
+          )}
+          {activeTab === 'chaos' && (
+            <div className="space-y-4">
+              {currentConfig.chaos_profiles && Object.keys(currentConfig.chaos_profiles).length > 0 ? (
+                Object.entries(currentConfig.chaos_profiles).map(([name, profile]) => (
+                  <Card key={name}>
+                    <CardHeader className="py-3">
+                      <CardTitle className="text-base">{name}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-3">
+                      <p className="text-sm text-muted-foreground">
+                        {profile.name || 'No description'}
                       </p>
                     </CardContent>
                   </Card>
@@ -193,15 +198,15 @@ export function ConfigEditor() {
           )}
           {activeTab === 'mocks' && (
             <div className="space-y-4">
-              {currentConfig.mocks && Object.keys(currentConfig.mocks).length > 0 ? (
-                Object.entries(currentConfig.mocks).map(([name, profile]) => (
+              {currentConfig.mock_profiles && Object.keys(currentConfig.mock_profiles).length > 0 ? (
+                Object.entries(currentConfig.mock_profiles).map(([name, profile]) => (
                   <Card key={name}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base">{name}</CardTitle>
                     </CardHeader>
                     <CardContent className="py-3">
                       <p className="text-sm text-muted-foreground">
-                        {profile.injectors?.length || 0} injectors
+                        {profile.name || 'No description'}
                       </p>
                     </CardContent>
                   </Card>
