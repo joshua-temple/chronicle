@@ -94,7 +94,7 @@ func (s *Server) initWebFS() {
 // setupRoutes configures the HTTP routes.
 func (s *Server) setupRoutes() {
 	// Local API routes
-	s.mux.HandleFunc("GET /api/local/project", s.handleGetProject)
+	s.mux.HandleFunc("GET /api/local/project", s.handleProject)
 	s.mux.HandleFunc("GET /api/local/config", s.handleGetConfig)
 	s.mux.HandleFunc("PUT /api/local/config", s.handlePutConfig)
 	s.mux.HandleFunc("POST /api/local/config/validate", s.handleValidateConfig)
@@ -188,14 +188,6 @@ func (s *Server) devModeHandler() http.Handler {
 }
 
 // API Handler placeholders
-
-// handleGetProject returns project information.
-func (s *Server) handleGetProject(w http.ResponseWriter, _ *http.Request) {
-	// Placeholder - will be implemented in a later task
-	writeJSON(w, http.StatusOK, map[string]any{
-		"dir": s.dir,
-	})
-}
 
 // handleGetConfig returns the Chronicle configuration.
 func (s *Server) handleGetConfig(w http.ResponseWriter, _ *http.Request) {

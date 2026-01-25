@@ -2,8 +2,12 @@ package ui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -167,5 +171,54 @@ func TestServer_Accessors(t *testing.T) {
 
 	if s.Dir() != "/test/dir" {
 		t.Errorf("Dir() = %q, want /test/dir", s.Dir())
+	}
+}
+
+func TestServer_HandleProject(t *testing.T) {
+	// Test with config file
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "chronicle.yaml")
+	if err := os.WriteFile(configPath, []byte("version: \"1\""), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := New(WithDir(tmpDir))
+	req := httptest.NewRequest("GET", "/api/local/project", nil)
+	w := httptest.NewRecorder()
+	s.mux.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+
+	var info ProjectInfo
+	if err := json.NewDecoder(w.Body).Decode(&info); err != nil {
+		t.Fatal(err)
+	}
+
+	if !info.ConfigExists {
+		t.Error("expected config to exist")
+	}
+	if info.LastModified == nil {
+		t.Error("expected last modified time")
+	}
+	if info.ConfigFile != "chronicle.yaml" {
+		t.Errorf("expected config file 'chronicle.yaml', got %s", info.ConfigFile)
+	}
+
+	// Test without config file
+	tmpDir2 := t.TempDir()
+	s2 := New(WithDir(tmpDir2))
+	req2 := httptest.NewRequest("GET", "/api/local/project", nil)
+	w2 := httptest.NewRecorder()
+	s2.mux.ServeHTTP(w2, req2)
+
+	var info2 ProjectInfo
+	if err := json.NewDecoder(w2.Body).Decode(&info2); err != nil {
+		t.Fatal(err)
+	}
+
+	if info2.ConfigExists {
+		t.Error("expected config to not exist")
 	}
 }
