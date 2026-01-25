@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/joshua-temple/chronicle/pkg/ui"
+	"github.com/joshua-temple/chronicle/pkg/ui/standalone"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,7 @@ func NewUICmd() *cobra.Command {
 	var port int
 	var dir string
 	var noBrowser bool
+	var standaloneMode bool
 
 	cmd := &cobra.Command{
 		Use:   "ui",
@@ -30,24 +32,33 @@ The UI allows you to:
 - Build and modify scenarios
 - Browse discovered components
 
+In standalone mode (--standalone), the UI serves as a multi-project
+control center for managing multiple Chronicle projects.
+
 Example:
   chronicle ui
   chronicle ui --port 8080
-  chronicle ui --dir ./my-project`,
+  chronicle ui --dir ./my-project
+  chronicle ui --standalone --port 3001`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUI(port, dir, noBrowser)
+			return runUI(port, dir, noBrowser, standaloneMode)
 		},
 	}
 
 	cmd.Flags().IntVarP(&port, "port", "p", 3000, "Port to serve on")
 	cmd.Flags().StringVarP(&dir, "dir", "d", ".", "Project directory")
 	cmd.Flags().BoolVar(&noBrowser, "no-browser", false, "Don't open browser automatically")
+	cmd.Flags().BoolVar(&standaloneMode, "standalone", false, "Run as multi-project control center")
 
 	return cmd
 }
 
-func runUI(port int, dir string, noBrowser bool) error {
-	// Validate directory exists
+func runUI(port int, dir string, noBrowser bool, standaloneMode bool) error {
+	if standaloneMode {
+		return runStandalone(port, noBrowser)
+	}
+
+	// Single-project mode: validate directory exists
 	absDir, err := filepath.Abs(dir)
 	if err != nil {
 		return fmt.Errorf("invalid directory: %w", err)
@@ -76,6 +87,40 @@ func runUI(port int, dir string, noBrowser bool) error {
 	url := fmt.Sprintf("http://localhost:%d", port)
 	fmt.Printf("Chronicle UI available at %s\n", url)
 	fmt.Printf("Project directory: %s\n", absDir)
+	fmt.Println("Press Ctrl+C to stop")
+
+	// Open browser
+	if !noBrowser {
+		go openBrowser(url)
+	}
+
+	if err := server.Start(ctx); err != nil {
+		return fmt.Errorf("server error: %w", err)
+	}
+
+	return nil
+}
+
+func runStandalone(port int, noBrowser bool) error {
+	server, err := standalone.NewServer(standalone.WithPort(port))
+	if err != nil {
+		return fmt.Errorf("failed to create standalone server: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Handle signals
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nShutting down...")
+		cancel()
+	}()
+
+	url := fmt.Sprintf("http://localhost:%d", port)
+	fmt.Printf("Chronicle Control Center available at %s\n", url)
 	fmt.Println("Press Ctrl+C to stop")
 
 	// Open browser
