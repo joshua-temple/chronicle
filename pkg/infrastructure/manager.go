@@ -8,6 +8,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/network"
 )
 
 // ManagerOption configures Manager behavior.
@@ -25,6 +28,7 @@ type Manager struct {
 	started        bool
 	networkEnabled bool
 	networkName    string
+	network        *testcontainers.DockerNetwork
 }
 
 // NewManager creates a new infrastructure manager.
@@ -111,8 +115,26 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	var errs []error
 
-	// Initialize all providers first
+	// Create shared network if enabled
+	if m.networkEnabled {
+		dockerNetwork, err := network.New(ctx,
+			network.WithDriver("bridge"),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to create network: %w", err)
+		}
+		m.network = dockerNetwork
+		m.networkName = dockerNetwork.Name
+	}
+
+	// Set network on providers that support it
 	for name, provider := range m.providers {
+		if m.networkEnabled && m.networkName != "" {
+			if np, ok := provider.(NetworkAwareProvider); ok {
+				np.SetNetwork(m.networkName)
+			}
+		}
+
 		config := m.configs[name]
 		if err := provider.Initialize(ctx, config.Config); err != nil {
 			errs = append(errs, fmt.Errorf("failed to initialize %s: %w", name, err))
@@ -120,6 +142,16 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 
 	if len(errs) > 0 {
+		// Stop any providers that were initialized
+		for _, provider := range m.providers {
+			_ = provider.Stop(ctx)
+		}
+		// Cleanup network on failure
+		if m.network != nil {
+			_ = m.network.Remove(ctx)
+			m.network = nil
+			m.networkName = ""
+		}
 		return errors.Join(errs...)
 	}
 
@@ -136,6 +168,12 @@ func (m *Manager) Start(ctx context.Context) error {
 			if provider.Status() == StatusRunning {
 				_ = provider.Stop(ctx)
 			}
+		}
+		// Cleanup network on failure
+		if m.network != nil {
+			_ = m.network.Remove(ctx)
+			m.network = nil
+			m.networkName = ""
 		}
 		return errors.Join(errs...)
 	}
@@ -159,6 +197,15 @@ func (m *Manager) Stop(ctx context.Context) error {
 		if err := provider.Stop(ctx); err != nil {
 			errs = append(errs, fmt.Errorf("failed to stop %s: %w", name, err))
 		}
+	}
+
+	// Cleanup network
+	if m.network != nil {
+		if err := m.network.Remove(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("failed to remove network: %w", err))
+		}
+		m.network = nil
+		m.networkName = ""
 	}
 
 	m.started = false
