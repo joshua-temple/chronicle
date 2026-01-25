@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"syscall"
 
@@ -46,9 +47,18 @@ Example:
 }
 
 func runUI(port int, dir string, noBrowser bool) error {
+	// Validate directory exists
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("invalid directory: %w", err)
+	}
+	if _, err := os.Stat(absDir); os.IsNotExist(err) {
+		return fmt.Errorf("directory does not exist: %s", absDir)
+	}
+
 	server := ui.New(
 		ui.WithPort(port),
-		ui.WithDir(dir),
+		ui.WithDir(absDir),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -65,6 +75,7 @@ func runUI(port int, dir string, noBrowser bool) error {
 
 	url := fmt.Sprintf("http://localhost:%d", port)
 	fmt.Printf("Chronicle UI available at %s\n", url)
+	fmt.Printf("Project directory: %s\n", absDir)
 	fmt.Println("Press Ctrl+C to stop")
 
 	// Open browser
