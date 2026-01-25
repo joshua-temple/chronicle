@@ -73,15 +73,15 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Check tabs are present (they're buttons)
-      expect(screen.getByRole('button', { name: /general/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /scenarios/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /infrastructure/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /chaos/i })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /mocks/i })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /general/i })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /scenarios/i })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /infrastructure/i })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /chaos/i })).toBeInTheDocument()
+      expect(screen.getByRole('tab', { name: /mocks/i })).toBeInTheDocument()
     })
 
     it('displays version in general tab', async () => {
@@ -97,11 +97,11 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Click scenarios tab
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       await waitFor(() => {
         expect(screen.getByText('happy_path')).toBeInTheDocument()
@@ -115,11 +115,11 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Click infrastructure tab
-      await user.click(screen.getByRole('button', { name: /infrastructure/i }))
+      await user.click(screen.getByRole('tab', { name: /infrastructure/i }))
 
       await waitFor(() => {
         expect(screen.getByText('postgres')).toBeInTheDocument()
@@ -133,11 +133,11 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Click chaos tab
-      await user.click(screen.getByRole('button', { name: /chaos/i }))
+      await user.click(screen.getByRole('tab', { name: /chaos/i }))
 
       await waitFor(() => {
         expect(screen.getByText('network_chaos')).toBeInTheDocument()
@@ -149,22 +149,22 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Click mocks tab
-      await user.click(screen.getByRole('button', { name: /mocks/i }))
+      await user.click(screen.getByRole('tab', { name: /mocks/i }))
 
       await waitFor(() => {
         expect(screen.getByText('happy_mocks')).toBeInTheDocument()
       })
     })
 
-    it('has a save button', async () => {
+    it('shows read-only badge', async () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: /save/i })).toBeInTheDocument()
+        expect(screen.getByText('Read-only')).toBeInTheDocument()
       })
     })
 
@@ -175,7 +175,7 @@ describe('ConfigEditor Page', () => {
 
       render(<ConfigEditor />)
 
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
     })
 
     it('shows error when config not found', async () => {
@@ -223,10 +223,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /infrastructure/i }))
+      await user.click(screen.getByRole('tab', { name: /infrastructure/i }))
 
       await waitFor(() => {
         expect(screen.getByText(/no infrastructure providers configured/i)).toBeInTheDocument()
@@ -249,10 +249,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /chaos/i }))
+      await user.click(screen.getByRole('tab', { name: /chaos/i }))
 
       await waitFor(() => {
         expect(screen.getByText(/no chaos profiles configured/i)).toBeInTheDocument()
@@ -275,10 +275,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /mocks/i }))
+      await user.click(screen.getByRole('tab', { name: /mocks/i }))
 
       await waitFor(() => {
         expect(screen.getByText(/no mock profiles configured/i)).toBeInTheDocument()
@@ -295,10 +295,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      const scenariosTab = screen.getByRole('button', { name: /scenarios/i })
+      const scenariosTab = screen.getByRole('tab', { name: /scenarios/i })
       await user.click(scenariosTab)
 
       // Should show scenarios content
@@ -312,10 +312,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      const infraTab = screen.getByRole('button', { name: /infrastructure/i })
+      const infraTab = screen.getByRole('tab', { name: /infrastructure/i })
       await user.click(infraTab)
 
       await waitFor(() => {
@@ -328,10 +328,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      const chaosTab = screen.getByRole('button', { name: /chaos/i })
+      const chaosTab = screen.getByRole('tab', { name: /chaos/i })
       await user.click(chaosTab)
 
       await waitFor(() => {
@@ -344,10 +344,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      const mocksTab = screen.getByRole('button', { name: /mocks/i })
+      const mocksTab = screen.getByRole('tab', { name: /mocks/i })
       await user.click(mocksTab)
 
       await waitFor(() => {
@@ -360,17 +360,17 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Go to scenarios
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
       await waitFor(() => {
         expect(screen.getByText('happy_path')).toBeInTheDocument()
       })
 
       // Return to general
-      await user.click(screen.getByRole('button', { name: /general/i }))
+      await user.click(screen.getByRole('tab', { name: /general/i }))
       await waitFor(() => {
         expect(screen.getByText('1.0')).toBeInTheDocument()
       })
@@ -381,32 +381,32 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // General tab (default)
       expect(screen.getByText('1.0')).toBeInTheDocument()
 
       // Scenarios
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
       await waitFor(() => {
         expect(screen.getByText('happy_path')).toBeInTheDocument()
       })
 
       // Infrastructure
-      await user.click(screen.getByRole('button', { name: /infrastructure/i }))
+      await user.click(screen.getByRole('tab', { name: /infrastructure/i }))
       await waitFor(() => {
         expect(screen.getByText('postgres')).toBeInTheDocument()
       })
 
       // Chaos
-      await user.click(screen.getByRole('button', { name: /chaos/i }))
+      await user.click(screen.getByRole('tab', { name: /chaos/i }))
       await waitFor(() => {
         expect(screen.getByText('network_chaos')).toBeInTheDocument()
       })
 
       // Mocks
-      await user.click(screen.getByRole('button', { name: /mocks/i }))
+      await user.click(screen.getByRole('tab', { name: /mocks/i }))
       await waitFor(() => {
         expect(screen.getByText('happy_mocks')).toBeInTheDocument()
       })
@@ -414,28 +414,16 @@ describe('ConfigEditor Page', () => {
   })
 
   // ============================================
-  // WORKFLOW TESTS - Save Functionality
+  // WORKFLOW TESTS - Configuration Display
   // ============================================
-  describe('Save Workflow', () => {
-    it('save button is disabled when no changes made', async () => {
+  describe('Configuration Display', () => {
+    it('shows read-only indicator', async () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
+        expect(screen.getByText('Read-only')).toBeInTheDocument()
       })
-
-      const saveButton = screen.getByRole('button', { name: /save/i })
-      expect(saveButton).toBeDisabled()
-    })
-
-    it('does not show unsaved changes badge initially', async () => {
-      render(<ConfigEditor />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
-      })
-
-      expect(screen.queryByText('Unsaved changes')).not.toBeInTheDocument()
     })
 
     it('shows scenario step counts', async () => {
@@ -443,15 +431,15 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       await waitFor(() => {
-        // Step count format is "N steps" (component uses plural form)
+        // Step count format is "N step(s)" - singular or plural depending on count
         // Multiple scenarios have step counts, so use getAllByText
-        const stepCounts = screen.getAllByText(/\d+ steps/)
+        const stepCounts = screen.getAllByText(/\d+ steps?/)
         expect(stepCounts.length).toBeGreaterThan(0)
       })
     })
@@ -461,10 +449,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       await waitFor(() => {
         expect(screen.getByText(/smoke/)).toBeInTheDocument()
@@ -476,35 +464,19 @@ describe('ConfigEditor Page', () => {
   // ACCESSIBILITY TESTS
   // ============================================
   describe('Accessibility', () => {
-    it('tabs are keyboard navigable', async () => {
-      const user = userEvent.setup()
+    it('tabs have proper ARIA roles', async () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      // All tabs should be buttons and focusable
-      const tabs = screen.getAllByRole('button').filter(btn =>
-        ['general', 'scenarios', 'infrastructure', 'chaos', 'mocks'].some(
-          name => btn.textContent?.toLowerCase().includes(name)
-        )
-      )
+      // Check tablist exists
+      expect(screen.getByRole('tablist')).toBeInTheDocument()
 
-      tabs.forEach(tab => {
-        expect(tab.tagName.toLowerCase()).toBe('button')
-      })
-    })
-
-    it('save button has accessible name', async () => {
-      render(<ConfigEditor />)
-
-      await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
-      })
-
-      const saveButton = screen.getByRole('button', { name: /save/i })
-      expect(saveButton).toBeInTheDocument()
+      // All tabs should have role="tab"
+      const tabs = screen.getAllByRole('tab')
+      expect(tabs.length).toBe(5) // general, scenarios, infrastructure, chaos, mocks
     })
 
     it('error state has accessible error message', async () => {
@@ -534,22 +506,22 @@ describe('ConfigEditor Page', () => {
       expect(errorElement).toBeInTheDocument()
     })
 
-    it('loading state shows spinner', () => {
+    it('loading state shows skeleton', () => {
       vi.mocked(global.fetch).mockImplementation(
         () => new Promise(() => {})
       )
 
       render(<ConfigEditor />)
 
-      const spinner = document.querySelector('.animate-spin')
-      expect(spinner).toBeInTheDocument()
+      const skeleton = document.querySelector('.animate-pulse')
+      expect(skeleton).toBeInTheDocument()
     })
 
     it('page header has proper heading hierarchy', async () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Should have h1 for main title
@@ -562,11 +534,11 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // When switching tabs, content should update
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       await waitFor(() => {
         // The card title should update to reflect the tab
@@ -673,12 +645,12 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       // Should handle missing scenarios gracefully - renders without crashing
       const user = userEvent.setup()
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       // The scenarios tab should be visible - card title shows "Scenarios"
       await waitFor(() => {
@@ -703,10 +675,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       // With empty array, no scenario cards should be shown
       // Card title shows "Scenarios" (h3 heading)
@@ -746,7 +718,7 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
       expect(screen.getByText('1.0')).toBeInTheDocument()
@@ -774,10 +746,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       await waitFor(() => {
         expect(screen.getByText('empty_scenario')).toBeInTheDocument()
@@ -809,10 +781,10 @@ describe('ConfigEditor Page', () => {
       render(<ConfigEditor />)
 
       await waitFor(() => {
-        expect(screen.getByText('Configuration')).toBeInTheDocument()
+        expect(screen.getByText('Configuration Viewer')).toBeInTheDocument()
       })
 
-      await user.click(screen.getByRole('button', { name: /scenarios/i }))
+      await user.click(screen.getByRole('tab', { name: /scenarios/i }))
 
       await waitFor(() => {
         expect(screen.getByText('no_tags_scenario')).toBeInTheDocument()

@@ -1,10 +1,9 @@
-import { useState, useEffect } from 'react'
-import { useConfig, useSaveConfig, useValidateConfig } from '@/hooks/useLocalConfig'
+import { useState } from 'react'
+import { useConfig } from '@/hooks/useLocalConfig'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, Save, CheckCircle2, AlertCircle } from 'lucide-react'
-import type { ChronicleConfig } from '@/api/local'
+import { Skeleton } from '@/components/ui/skeleton'
+import { AlertCircle } from 'lucide-react'
 
 type TabId = 'general' | 'scenarios' | 'infrastructure' | 'chaos' | 'mocks'
 
@@ -18,25 +17,33 @@ const TABS: { id: TabId; label: string }[] = [
 
 export function ConfigEditor() {
   const { data: config, isLoading, error } = useConfig()
-  const saveConfig = useSaveConfig()
-  const validateConfig = useValidateConfig()
   const [activeTab, setActiveTab] = useState<TabId>('general')
-  const [editedConfig, setEditedConfig] = useState<ChronicleConfig | null>(null)
-  const [validationResult, setValidationResult] = useState<{ valid: boolean; errors: string[] } | null>(null)
-
-  // Initialize edited config when loaded
-  useEffect(() => {
-    if (config && !editedConfig) {
-      setEditedConfig(config)
-    }
-  }, [config, editedConfig])
-
-  const currentConfig = editedConfig ?? config
 
   if (isLoading) {
     return (
-      <div className="flex h-64 items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-20" />
+        </div>
+        <div className="flex gap-1 border-b pb-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <Skeleton key={i} className="h-8 w-24" />
+          ))}
+        </div>
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-6 w-32" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -57,7 +64,7 @@ export function ConfigEditor() {
     )
   }
 
-  if (!currentConfig) {
+  if (!config) {
     return (
       <div className="p-6">
         <Card>
@@ -69,51 +76,47 @@ export function ConfigEditor() {
     )
   }
 
-  const handleSave = async () => {
-    if (!editedConfig) return
-
-    const result = await validateConfig.mutateAsync(editedConfig)
-    setValidationResult(result)
-
-    if (result.valid) {
-      await saveConfig.mutateAsync(editedConfig)
-    }
-  }
-
-  const hasChanges = editedConfig !== null && JSON.stringify(editedConfig) !== JSON.stringify(config)
-
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Configuration</h1>
-          <p className="text-muted-foreground">Edit your Chronicle configuration</p>
+          <h1 className="text-2xl font-bold">Configuration Viewer</h1>
+          <p className="text-muted-foreground">
+            View your Chronicle configuration &middot; Edit <code className="text-xs bg-muted px-1 py-0.5 rounded">chronicle.yaml</code> directly
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          {hasChanges && <Badge variant="secondary">Unsaved changes</Badge>}
-          {validationResult && !validationResult.valid && (
-            <Badge variant="destructive">{validationResult.errors.length} error(s)</Badge>
-          )}
-          <Button onClick={handleSave} disabled={!hasChanges || saveConfig.isPending}>
-            {saveConfig.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : saveConfig.isSuccess ? (
-              <CheckCircle2 className="mr-2 h-4 w-4" />
-            ) : (
-              <Save className="mr-2 h-4 w-4" />
-            )}
-            Save
-          </Button>
-        </div>
+        <Badge variant="outline" className="text-muted-foreground">
+          Read-only
+        </Badge>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b" role="tablist" aria-label="Configuration sections">
         {TABS.map((tab) => (
           <button
             key={tab.id}
+            id={`tab-${tab.id}`}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            aria-controls={`panel-${tab.id}`}
+            tabIndex={activeTab === tab.id ? 0 : -1}
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(e) => {
+              const tabIds = TABS.map(t => t.id)
+              const currentIndex = tabIds.indexOf(activeTab)
+              if (e.key === 'ArrowRight') {
+                const nextIndex = (currentIndex + 1) % tabIds.length
+                setActiveTab(tabIds[nextIndex])
+              } else if (e.key === 'ArrowLeft') {
+                const prevIndex = (currentIndex - 1 + tabIds.length) % tabIds.length
+                setActiveTab(tabIds[prevIndex])
+              } else if (e.key === 'Home') {
+                setActiveTab(tabIds[0])
+              } else if (e.key === 'End') {
+                setActiveTab(tabIds[tabIds.length - 1])
+              }
+            }}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               activeTab === tab.id
                 ? 'border-primary text-primary'
@@ -126,7 +129,12 @@ export function ConfigEditor() {
       </div>
 
       {/* Content */}
-      <Card>
+      <Card
+        role="tabpanel"
+        id={`panel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+        tabIndex={0}
+      >
         <CardHeader>
           <CardTitle>{TABS.find((t) => t.id === activeTab)?.label}</CardTitle>
         </CardHeader>
@@ -135,20 +143,20 @@ export function ConfigEditor() {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium">Version</label>
-                <p className="text-muted-foreground">{currentConfig.version}</p>
+                <p className="text-muted-foreground">{config.version}</p>
               </div>
             </div>
           )}
           {activeTab === 'scenarios' && (
             <div className="space-y-4">
-              {currentConfig.scenarios?.map((scenario, i) => (
+              {config.scenarios?.map((scenario, i) => (
                 <Card key={i}>
                   <CardHeader className="py-3">
                     <CardTitle className="text-base">{scenario.name}</CardTitle>
                   </CardHeader>
                   <CardContent className="py-3">
                     <p className="text-sm text-muted-foreground">
-                      {scenario.flow?.length || 0} steps
+                      {scenario.flow?.length || 0} {(scenario.flow?.length || 0) === 1 ? 'step' : 'steps'}
                       {scenario.tags?.length ? ` - ${scenario.tags.join(', ')}` : ''}
                     </p>
                   </CardContent>
@@ -158,8 +166,8 @@ export function ConfigEditor() {
           )}
           {activeTab === 'infrastructure' && (
             <div className="space-y-4">
-              {currentConfig.infrastructure && Object.keys(currentConfig.infrastructure).length > 0 ? (
-                Object.entries(currentConfig.infrastructure).map(([name, config]) => (
+              {config.infrastructure && Object.keys(config.infrastructure).length > 0 ? (
+                Object.entries(config.infrastructure).map(([name, config]) => (
                   <Card key={name}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base">{name}</CardTitle>
@@ -178,8 +186,8 @@ export function ConfigEditor() {
           )}
           {activeTab === 'chaos' && (
             <div className="space-y-4">
-              {currentConfig.chaos_profiles && Object.keys(currentConfig.chaos_profiles).length > 0 ? (
-                Object.entries(currentConfig.chaos_profiles).map(([name, profile]) => (
+              {config.chaos_profiles && Object.keys(config.chaos_profiles).length > 0 ? (
+                Object.entries(config.chaos_profiles).map(([name, profile]) => (
                   <Card key={name}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base">{name}</CardTitle>
@@ -198,8 +206,8 @@ export function ConfigEditor() {
           )}
           {activeTab === 'mocks' && (
             <div className="space-y-4">
-              {currentConfig.mock_profiles && Object.keys(currentConfig.mock_profiles).length > 0 ? (
-                Object.entries(currentConfig.mock_profiles).map(([name, profile]) => (
+              {config.mock_profiles && Object.keys(config.mock_profiles).length > 0 ? (
+                Object.entries(config.mock_profiles).map(([name, profile]) => (
                   <Card key={name}>
                     <CardHeader className="py-3">
                       <CardTitle className="text-base">{name}</CardTitle>
@@ -219,21 +227,6 @@ export function ConfigEditor() {
         </CardContent>
       </Card>
 
-      {/* Validation Errors */}
-      {validationResult && !validationResult.valid && (
-        <Card className="border-destructive">
-          <CardHeader>
-            <CardTitle className="text-destructive">Validation Errors</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="list-disc list-inside space-y-1">
-              {validationResult.errors.map((err, i) => (
-                <li key={i} className="text-sm text-destructive">{err}</li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

@@ -4,7 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Search, Loader2, X, FileCode, ChevronRight } from 'lucide-react'
+import { Modal } from '@/components/ui/modal'
+import { SkeletonList, Skeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Highlight } from '@/components/ui/highlight'
+import { Search, X, FileCode, ChevronRight } from 'lucide-react'
 import type { Component } from '@/api/types'
 
 type ComponentType = 'all' | 'setup' | 'task' | 'validation' | 'teardown'
@@ -39,8 +43,11 @@ export function Components() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" aria-label="Loading components" />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Components</h1>
+        </div>
+        <SkeletonList count={6} />
       </div>
     )
   }
@@ -82,11 +89,26 @@ export function Components() {
 
       {/* Component grid */}
       {filteredComponents?.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No components found matching your filters.
-          </CardContent>
-        </Card>
+        <EmptyState
+          variant={search || selectedType !== 'all' ? 'search' : 'empty'}
+          title="No components found"
+          description={
+            search || selectedType !== 'all'
+              ? 'Try adjusting your search or filter criteria'
+              : 'Components will appear here once they are discovered in your codebase'
+          }
+          action={
+            search || selectedType !== 'all'
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearch('')
+                    setSelectedType('all')
+                  },
+                }
+              : undefined
+          }
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {filteredComponents?.map((component) => (
@@ -94,6 +116,7 @@ export function Components() {
               key={component.name}
               component={component}
               onSelect={setSelectedComponent}
+              searchQuery={search}
             />
           ))}
         </div>
@@ -110,9 +133,10 @@ export function Components() {
 interface ComponentCardProps {
   component: Component
   onSelect: (name: string) => void
+  searchQuery?: string
 }
 
-function ComponentCard({ component, onSelect }: ComponentCardProps) {
+function ComponentCard({ component, onSelect, searchQuery = '' }: ComponentCardProps) {
   return (
     <Card
       className="cursor-pointer transition-colors hover:bg-secondary/50"
@@ -124,13 +148,17 @@ function ComponentCard({ component, onSelect }: ComponentCardProps) {
     >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">{component.name}</CardTitle>
+          <CardTitle className="text-base">
+            <Highlight text={component.name} query={searchQuery} />
+          </CardTitle>
           <Badge className={TYPE_COLORS[component.type]}>{component.type}</Badge>
         </div>
       </CardHeader>
       <CardContent>
         {component.description && (
-          <p className="mb-3 text-sm text-muted-foreground line-clamp-2">{component.description}</p>
+          <p className="mb-3 text-sm text-muted-foreground line-clamp-2">
+            <Highlight text={component.description} query={searchQuery} />
+          </p>
         )}
 
         {/* Tags */}
@@ -174,127 +202,127 @@ interface ComponentDetailProps {
 function ComponentDetail({ name, onClose }: ComponentDetailProps) {
   const { data: component, isLoading } = useComponent(name)
 
-  if (isLoading) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-        onClick={onClose}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Loading component details"
-      >
-        <Card className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
-          <CardContent className="flex items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!component) return null
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="component-detail-title"
+    <Modal
+      open={true}
+      onClose={onClose}
+      titleId="component-detail-title"
     >
-      <Card
-        className="w-full max-w-2xl max-h-[80vh] overflow-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div className="flex items-center gap-3">
-            <CardTitle id="component-detail-title">{component.name}</CardTitle>
-            <Badge className={TYPE_COLORS[component.type]}>{component.type}</Badge>
-          </div>
-          <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
-            <X className="h-5 w-5" />
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {component.description && (
-            <p className="text-muted-foreground">{component.description}</p>
-          )}
-
-          {/* Tags */}
-          {component.tags && component.tags.length > 0 && (
-            <div>
-              <h4 className="mb-2 font-semibold">Tags</h4>
-              <div className="flex flex-wrap gap-2">
-                {component.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
+      {isLoading ? (
+        <>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-5 w-16 rounded-full" />
             </div>
-          )}
-
-          {/* Produces */}
-          {component.produces && component.produces.length > 0 && (
-            <div>
-              <h4 className="mb-2 font-semibold">Produces</h4>
-              <div className="flex flex-wrap gap-2">
-                {component.produces.map((item) => (
-                  <Badge key={item} variant="outline" className="text-green-400 border-green-400/50">
-                    {item}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Requires */}
-          {component.requires && component.requires.length > 0 && (
-            <div>
-              <h4 className="mb-2 font-semibold">Requires</h4>
-              <div className="flex flex-wrap gap-2">
-                {component.requires.map((item) => (
-                  <Badge key={item} variant="outline" className="text-amber-400 border-amber-400/50">
-                    {item}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Source file */}
-          <div>
-            <h4 className="mb-2 font-semibold">Source File</h4>
-            <div className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm">
-              <FileCode className="h-4 w-4 text-muted-foreground" />
-              <code className="text-muted-foreground">{component.source_file}</code>
-            </div>
-          </div>
-
-          {/* Scenarios using this component */}
-          {component.scenarios && component.scenarios.length > 0 && (
-            <div>
-              <h4 className="mb-2 font-semibold">Used in Scenarios</h4>
-              <div className="space-y-2">
-                {component.scenarios.map((scenario) => (
-                  <div
-                    key={scenario}
-                    className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
-                  >
-                    {scenario}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end pt-4">
-            <Button variant="outline" onClick={onClose}>
-              Close
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+              <X className="h-5 w-5" />
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <div className="space-y-2 pt-2">
+              <Skeleton className="h-4 w-20" />
+              <div className="flex gap-2">
+                <Skeleton className="h-6 w-16 rounded-full" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+            </div>
+          </CardContent>
+        </>
+      ) : component ? (
+        <>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div className="flex items-center gap-3">
+              <CardTitle id="component-detail-title">{component.name}</CardTitle>
+              <Badge className={TYPE_COLORS[component.type]}>{component.type}</Badge>
+            </div>
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close">
+              <X className="h-5 w-5" />
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {component.description && (
+              <p className="text-muted-foreground">{component.description}</p>
+            )}
+
+            {/* Tags */}
+            {component.tags && component.tags.length > 0 && (
+              <div>
+                <h4 className="mb-2 font-semibold">Tags</h4>
+                <div className="flex flex-wrap gap-2">
+                  {component.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Produces */}
+            {component.produces && component.produces.length > 0 && (
+              <div>
+                <h4 className="mb-2 font-semibold">Produces</h4>
+                <div className="flex flex-wrap gap-2">
+                  {component.produces.map((item) => (
+                    <Badge key={item} variant="outline" className="text-green-400 border-green-400/50">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Requires */}
+            {component.requires && component.requires.length > 0 && (
+              <div>
+                <h4 className="mb-2 font-semibold">Requires</h4>
+                <div className="flex flex-wrap gap-2">
+                  {component.requires.map((item) => (
+                    <Badge key={item} variant="outline" className="text-amber-400 border-amber-400/50">
+                      {item}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Source file */}
+            <div>
+              <h4 className="mb-2 font-semibold">Source File</h4>
+              <div className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm">
+                <FileCode className="h-4 w-4 text-muted-foreground" />
+                <code className="text-muted-foreground">{component.source_file}</code>
+              </div>
+            </div>
+
+            {/* Scenarios using this component */}
+            {component.scenarios && component.scenarios.length > 0 && (
+              <div>
+                <h4 className="mb-2 font-semibold">Used in Scenarios</h4>
+                <div className="space-y-2">
+                  {component.scenarios.map((scenario) => (
+                    <div
+                      key={scenario}
+                      className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"
+                    >
+                      {scenario}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-4">
+              <Button variant="outline" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </CardContent>
+        </>
+      ) : null}
+    </Modal>
   )
 }

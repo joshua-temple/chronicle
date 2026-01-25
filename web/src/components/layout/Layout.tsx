@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { ToastContainer } from '@/components/ui/toast'
 import { useMode } from '@/stores/mode'
 
 export function Layout() {
@@ -15,6 +16,7 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+      <ToastContainer />
     </div>
   )
 }

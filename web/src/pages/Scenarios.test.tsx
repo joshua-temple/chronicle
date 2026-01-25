@@ -105,8 +105,8 @@ describe('Scenarios Page', () => {
 
       render(<Scenarios />)
 
-      // Should show loading spinner
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+      // Should show skeleton loaders
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
     })
 
     it('shows empty state when no scenarios', async () => {
@@ -138,10 +138,16 @@ describe('Scenarios Page', () => {
       const searchInput = screen.getByLabelText('Search scenarios')
       await user.type(searchInput, 'scenario_1')
 
-      // Only scenario_1 should be visible
-      expect(screen.getByText('test_scenario_1')).toBeInTheDocument()
-      expect(screen.queryByText('test_scenario_2')).not.toBeInTheDocument()
-      expect(screen.queryByText('test_scenario_3')).not.toBeInTheDocument()
+      // Only scenario_1 should be visible - use textContent check since Highlight splits text
+      await waitFor(() => {
+        const cards = screen.getAllByRole('button')
+        const scenario1Card = cards.find(el => el.textContent?.includes('test_scenario_1'))
+        const scenario2Card = cards.find(el => el.textContent?.includes('test_scenario_2'))
+        const scenario3Card = cards.find(el => el.textContent?.includes('test_scenario_3'))
+        expect(scenario1Card).toBeDefined()
+        expect(scenario2Card).toBeUndefined()
+        expect(scenario3Card).toBeUndefined()
+      })
     })
 
     it('filters scenarios by tag when clicking tag badge', async () => {
@@ -217,10 +223,15 @@ describe('Scenarios Page', () => {
       await user.type(searchInput, 'scenario_3')
 
       // Only scenario_3 should be visible (matches both smoke tag and search)
+      // With Highlight component, text is split so use custom matcher
       await waitFor(() => {
-        expect(screen.queryByText('test_scenario_1')).not.toBeInTheDocument()
+        const cards = screen.getAllByRole('button')
+        const scenario1Card = cards.find(el => el.textContent?.includes('test_scenario_1'))
+        expect(scenario1Card).toBeUndefined()
       })
-      expect(screen.getByText('test_scenario_3')).toBeInTheDocument()
+      const cards = screen.getAllByRole('button')
+      const scenario3Card = cards.find(el => el.textContent?.includes('test_scenario_3'))
+      expect(scenario3Card).toBeDefined()
     })
 
     it('clears search input to show filtered results again', async () => {
@@ -340,9 +351,9 @@ describe('Scenarios Page', () => {
       await waitFor(
         () => {
           // React Query will show loading then error
-          const loadingSpinner = document.querySelector('.animate-spin')
-          if (loadingSpinner) return
-          // If no spinner, check for any error handling
+          const loadingSkeleton = document.querySelector('.animate-pulse')
+          if (loadingSkeleton) return
+          // If no skeleton, check for any error handling
         },
         { timeout: 3000 }
       )
@@ -357,8 +368,8 @@ describe('Scenarios Page', () => {
 
       render(<Scenarios />)
 
-      // Should show loading initially
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+      // Should show skeleton loaders initially
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
     })
 
     it('handles empty scenarios array', async () => {

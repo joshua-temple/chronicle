@@ -4,7 +4,9 @@ import { ScenarioCard } from '@/components/scenarios/ScenarioCard'
 import { ScenarioDetail } from '@/components/scenarios/ScenarioDetail'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Search, Loader2 } from 'lucide-react'
+import { SkeletonList } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Search } from 'lucide-react'
 
 export function Scenarios() {
   const { data, isLoading } = useScenarios()
@@ -27,8 +29,11 @@ export function Scenarios() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Scenarios</h1>
+        </div>
+        <SkeletonList count={6} />
       </div>
     )
   }
@@ -83,12 +88,32 @@ export function Scenarios() {
             scenario={scenario}
             onRun={(name) => runScenario.mutate(name)}
             onSelect={setSelectedScenario}
+            searchQuery={search}
           />
         ))}
       </div>
 
       {filteredScenarios?.length === 0 && (
-        <div className="text-center text-muted-foreground">No scenarios found</div>
+        <EmptyState
+          variant={search || selectedTag ? 'search' : 'empty'}
+          title="No scenarios found"
+          description={
+            search || selectedTag
+              ? 'Try adjusting your search or filter criteria'
+              : 'Create your first scenario by adding one to your chronicle.yaml file'
+          }
+          action={
+            search || selectedTag
+              ? {
+                  label: 'Clear filters',
+                  onClick: () => {
+                    setSearch('')
+                    setSelectedTag(null)
+                  },
+                }
+              : undefined
+          }
+        />
       )}
 
       {/* Detail modal */}

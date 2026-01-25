@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -296,4 +299,46 @@ func (m *Manager) Endpoints() *EndpointRegistry {
 // Endpoint retrieves an endpoint by name.
 func (m *Manager) Endpoint(name string) (Endpoint, bool) {
 	return m.endpoints.Get(name)
+}
+
+// EnvVars returns environment variables for all registered endpoints.
+// Variable names are derived from endpoint names: "my-service" -> "MY_SERVICE_HOST", etc.
+func (m *Manager) EnvVars() map[string]string {
+	env := make(map[string]string)
+
+	for name, ep := range m.endpoints.All() {
+		prefix := strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+
+		env[prefix+"_HOST"] = ep.Host
+		env[prefix+"_PORT"] = strconv.Itoa(ep.Port)
+		env[prefix+"_ADDRESS"] = ep.Address()
+
+		if ep.InternalHost != "" {
+			env[prefix+"_INTERNAL_HOST"] = ep.InternalHost
+		}
+		if ep.InternalPort != 0 {
+			env[prefix+"_INTERNAL_PORT"] = strconv.Itoa(ep.InternalPort)
+		}
+
+		for k, v := range ep.Metadata {
+			metaKey := prefix + "_" + strings.ToUpper(strings.ReplaceAll(k, "-", "_"))
+			env[metaKey] = v
+		}
+	}
+
+	return env
+}
+
+// SetEnvVars sets environment variables in the current process for all endpoints.
+func (m *Manager) SetEnvVars() error {
+	var errs []error
+	for k, v := range m.EnvVars() {
+		if err := os.Setenv(k, v); err != nil {
+			errs = append(errs, fmt.Errorf("failed to set %s: %w", k, err))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }

@@ -3,6 +3,7 @@ import { fetchScenarios, fetchScenario } from '@/api/scenarios'
 import { fetchConfig, type FlowItemConfig } from '@/api/local'
 import { createRun } from '@/api/runs'
 import { useMode } from '@/stores/mode'
+import { toast } from '@/stores/toast'
 import type { Scenario } from '@/api/types'
 
 function getFlowItemName(f: FlowItemConfig): string {
@@ -77,8 +78,12 @@ export function useRunScenario() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (scenarioName: string) => createRun(scenarioName),
-    onSuccess: () => {
+    onSuccess: (_data, scenarioName) => {
       queryClient.invalidateQueries({ queryKey: ['runs'] })
+      toast.success('Scenario started', `Running "${scenarioName}"`)
+    },
+    onError: (error, scenarioName) => {
+      toast.error('Failed to start scenario', `Could not run "${scenarioName}": ${error.message}`)
     },
   })
 }

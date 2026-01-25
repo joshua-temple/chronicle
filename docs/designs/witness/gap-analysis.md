@@ -61,8 +61,14 @@ Chronicle implementation is **substantially complete** with all core phases impl
 | **Service Endpoint** | `ServiceEndpoint(name, port)` | ✅ Implemented | `pkg/infrastructure/provider.go` |
 | **Reuse Behavior** | AlwaysFresh, ReuseWithFlush, FullReuse | ✅ Implemented | `pkg/infrastructure/reuse.go` |
 | **Secret Management** | Environment, file, vault sources | ✅ Implemented | `pkg/config/secrets.go` |
+| **Shared Docker Networking** | Container-to-container communication | ❌ Not Implemented | - |
+| **Endpoint Registry** | Discoverable host:port mappings | ❌ Not Implemented | - |
+| **Custom Client Registration** | Service-layer client access | ❌ Not Implemented | - |
+| **Compose File Support** | Reference existing docker-compose.yml | ❌ Not Implemented | - |
 
-**Coverage: 95%** (Docker Compose provider not implemented)
+**Coverage: 70%** (Networking, endpoint discovery, and client registration not implemented)
+
+> See `docs/plans/2025-01-25-infrastructure-networking-design.md` for implementation plan.
 
 ---
 
@@ -190,7 +196,7 @@ Chronicle implementation is **substantially complete** with all core phases impl
 Feature Category          | Implementation Status
 --------------------------|----------------------
 Core Component Model      | ██████████ 100%
-Infrastructure            | █████████░  95%
+Infrastructure            | ███████░░░  70%
 Scenarios & Composition   | ██████████ 100%
 Execution                 | █████████░  90%
 Results & Reporting       | █████████░  90%
@@ -200,7 +206,7 @@ Multi-Language            | ███░░░░░░░  30%
 Extensibility             | ███████░░░  70%
 Test Intelligence         | ████████░░  80%
 --------------------------|----------------------
-Overall                   | ████████░░  81%
+Overall                   | ███████░░░  79%
 ```
 
 ---
@@ -247,19 +253,24 @@ Overall                   | ████████░░  81%
    - Formal plugin interface
    - Plugin marketplace/registry
 
-8. **Docker Compose Provider**
-   - Alternative to TestContainers
-   - Existing compose file support
-
-9. **Distributed Workers**
+8. **Distributed Workers**
    - Multi-node execution
    - Work distribution
+
+### In Progress
+
+9. **Infrastructure Networking & Client Registry** (see `docs/plans/2025-01-25-infrastructure-networking-design.md`)
+   - Shared Docker networking between containers
+   - Endpoint registry with discoverable host:port mappings
+   - Custom client registration for service layer
+   - Compose file reference support
+   - Host-to-container routing helpers
 
 ---
 
 ## Conclusion
 
-Chronicle implementation has achieved **~81% coverage** of the original Witness design vision. All core features required for production use are implemented:
+Chronicle implementation has achieved **~79% coverage** of the original Witness design vision. Core features required for production use are implemented, with infrastructure networking improvements in progress:
 
 - ✅ Component-based test composition
 - ✅ Annotation discovery
@@ -274,4 +285,10 @@ Chronicle implementation has achieved **~81% coverage** of the original Witness 
 - ✅ Web UI (dashboard, scenarios, runs, results, components browser)
 - ✅ Test intelligence (flaky detection, performance tracking, impact analysis)
 
-The remaining gaps are primarily in the visual scenario builder, multi-language SDKs, and deployment tooling, which can be added incrementally as needed.
+The remaining gaps are primarily in:
+- Infrastructure networking (shared networks, endpoint discovery, custom clients) - **in progress**
+- Visual scenario builder
+- Multi-language SDKs
+- Deployment tooling
+
+These can be added incrementally as needed.

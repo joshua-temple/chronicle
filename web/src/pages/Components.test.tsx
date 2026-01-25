@@ -131,7 +131,7 @@ describe('Components Page', () => {
 
       render(<Components />)
 
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
     })
 
     it('shows empty state when no components', async () => {
@@ -188,11 +188,18 @@ describe('Components Page', () => {
       const searchInput = screen.getByLabelText('Search components')
       await user.type(searchInput, 'User')
 
-      // Only User-related components should be visible
-      expect(screen.getByText('CreateUser')).toBeInTheDocument()
-      expect(screen.getByText('CleanupUser')).toBeInTheDocument()
-      expect(screen.queryByText('ProcessOrder')).not.toBeInTheDocument()
-      expect(screen.queryByText('ValidateOrder')).not.toBeInTheDocument()
+      // Only User-related components should be visible - use textContent check since Highlight splits text
+      await waitFor(() => {
+        const cards = screen.getAllByRole('button')
+        const createUserCard = cards.find(el => el.textContent?.includes('CreateUser'))
+        const cleanupUserCard = cards.find(el => el.textContent?.includes('CleanupUser'))
+        const processOrderCard = cards.find(el => el.textContent?.includes('ProcessOrder'))
+        const validateOrderCard = cards.find(el => el.textContent?.includes('ValidateOrder'))
+        expect(createUserCard).toBeDefined()
+        expect(cleanupUserCard).toBeDefined()
+        expect(processOrderCard).toBeUndefined()
+        expect(validateOrderCard).toBeUndefined()
+      })
     })
 
     it('filters components by type when clicking type button', async () => {
@@ -269,11 +276,14 @@ describe('Components Page', () => {
       const searchInput = screen.getByLabelText('Search components')
       await user.type(searchInput, 'Database')
 
-      // Only SetupDatabase should be visible
+      // Only SetupDatabase should be visible - use textContent check since Highlight splits text
       await waitFor(() => {
-        expect(screen.queryByText('CreateUser')).not.toBeInTheDocument()
+        const cards = screen.getAllByRole('button')
+        const createUserCard = cards.find(el => el.textContent?.includes('CreateUser'))
+        const setupDatabaseCard = cards.find(el => el.textContent?.includes('SetupDatabase'))
+        expect(createUserCard).toBeUndefined()
+        expect(setupDatabaseCard).toBeDefined()
       })
-      expect(screen.getByText('SetupDatabase')).toBeInTheDocument()
     })
 
     it('clears search input to show filtered type results again', async () => {
@@ -510,17 +520,15 @@ describe('Components Page', () => {
       expect(searchInput).not.toHaveAttribute('tabindex', '-1')
     })
 
-    it('loading spinner has accessible label', () => {
+    it('loading skeleton exists during load', () => {
       vi.mocked(global.fetch).mockImplementation(
         () => new Promise(() => {})
       )
 
       render(<Components />)
 
-      const spinner = document.querySelector('.animate-spin')
-      expect(spinner).toBeInTheDocument()
-      // The spinner should be wrapped in accessible context
-      expect(spinner?.closest('[aria-label]') || spinner?.getAttribute('aria-label')).toBeTruthy
+      const skeleton = document.querySelector('.animate-pulse')
+      expect(skeleton).toBeInTheDocument()
     })
   })
 
@@ -533,15 +541,15 @@ describe('Components Page', () => {
 
       render(<Components />)
 
-      // Should show loading initially
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+      // Should show skeleton loaders initially
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
 
       // Eventually error should be handled (exact behavior depends on React Query config)
       await waitFor(
         () => {
-          const spinner = document.querySelector('.animate-spin')
+          const skeleton = document.querySelector('.animate-pulse')
           // Either still loading or error state
-          expect(spinner).toBeDefined()
+          expect(skeleton).toBeDefined()
         },
         { timeout: 3000 }
       )
@@ -556,8 +564,8 @@ describe('Components Page', () => {
 
       render(<Components />)
 
-      // Should show loading initially
-      expect(document.querySelector('.animate-spin')).toBeInTheDocument()
+      // Should show skeleton loaders initially
+      expect(document.querySelector('.animate-pulse')).toBeInTheDocument()
     })
 
     it('handles empty components array', async () => {
