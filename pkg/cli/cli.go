@@ -58,6 +58,7 @@ func init() {
 	rootCmd.AddCommand(graphCmd)
 	rootCmd.AddCommand(resultsCmd)
 	rootCmd.AddCommand(reportCmd)
+	rootCmd.AddCommand(daemonCmd)
 }
 
 func initConfig() {
