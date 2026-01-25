@@ -1,9 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from '@/components/layout/Layout'
-
-function Dashboard() {
-  return <div className="text-2xl font-bold">Dashboard</div>
-}
+import { Dashboard } from '@/pages/Dashboard'
 
 function Scenarios() {
   return <div className="text-2xl font-bold">Scenarios</div>
