@@ -6,11 +6,11 @@
 
 | Field | Value |
 |-------|-------|
-| **Current Phase** | 6 (Chaos & Mocks) |
-| **Current Step** | 6.1 |
+| **Current Phase** | 7 (CLI) |
+| **Current Step** | 7.1 |
 | **Status** | in_progress |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | (pending Phase 5 commit) |
+| **Last Commit** | (pending Phase 6 commit) |
 
 ## Phase Checklist
 
@@ -47,15 +47,15 @@
 - [x] 4.4 Runner Integration (`pkg/execution/runner.go`) - commit: (pending)
 
 ### Phase 5: Results & Reporting
-- [x] 5.1 Results Model (`pkg/results/results.go`) - commit: (pending)
-- [x] 5.2 Narrative (`pkg/results/narrative.go`) - commit: (pending)
-- [x] 5.3 Storage Adapters (`pkg/results/storage.go`) - commit: (pending)
-- [x] 5.4 Report Formats (`pkg/results/reports.go`) - commit: (pending)
+- [x] 5.1 Results Model (`pkg/results/results.go`) - commit: fa6965e
+- [x] 5.2 Narrative (`pkg/results/narrative.go`) - commit: fa6965e
+- [x] 5.3 Storage Adapters (`pkg/results/storage.go`) - commit: fa6965e
+- [x] 5.4 Report Formats (`pkg/results/reports.go`) - commit: fa6965e
 
 ### Phase 6: Chaos & Mocks
-- [ ] 6.1 Chaos Profiles
-- [ ] 6.2 Mock System
-- [ ] 6.3 Chaos/Mock Examples
+- [x] 6.1 Chaos Profiles (`pkg/chaos/`) - commit: (pending)
+- [x] 6.2 Mock System (`pkg/mock/`) - commit: (pending)
+- [x] 6.3 Examples (deferred to Phase 9)
 
 ### Phase 7: CLI
 - [ ] 7.1 Core Commands
@@ -82,7 +82,7 @@ None.
 
 ## Next Action
 
-**Start Phase 6.1:** Implement chaos profiles (`pkg/chaos/`)
+**Start Phase 7.1:** Implement CLI core commands (`cmd/chronicle/`)
 
 ## Commit Log
 
