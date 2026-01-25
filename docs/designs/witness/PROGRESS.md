@@ -10,7 +10,7 @@
 | **Current Step** | 2.1 |
 | **Status** | starting |
 | **Branch** | feature/witness-implementation |
-| **Last Commit** | (pending commit for Phase 1.6) |
+| **Last Commit** | cc936a0 |
 
 ## Phase Checklist
 
@@ -25,7 +25,7 @@
 - [x] 1.3 Context Implementation (`pkg/context/context.go`) - commit: 880e96b
 - [x] 1.4 Annotation Discovery (`pkg/discovery/`) - commit: 70da8a1
 - [x] 1.5 Middleware System (`pkg/middleware/`) - commit: 7cfff37
-- [x] 1.6 Basic Example (`examples/basic/`) - commit: pending
+- [x] 1.6 Basic Example (`examples/basic/`) - commit: cc936a0
 
 ### Phase 2: Configuration & Scenarios
 - [ ] 2.1 YAML Configuration (`pkg/config/`)
@@ -94,7 +94,7 @@ None.
 | 1 | 1.3 | 880e96b | Implement typed context with generics |
 | 1 | 1.4 | 70da8a1 | Implement AST-based annotation parser |
 | 1 | 1.5 | 7cfff37 | Implement composable middleware system |
-| 1 | 1.6 | (pending) | Create basic example with tests |
+| 1 | 1.6 | cc936a0 | Create basic example with tests |
 
 ## Context Restoration Notes
 
