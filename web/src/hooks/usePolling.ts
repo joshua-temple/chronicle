@@ -1,9 +1,9 @@
-import { useEffect, useCallback } from 'react'
-import {
-  useProjectsStore,
-  POLLING_INTERVAL_ACTIVE,
-  POLLING_INTERVAL_HIDDEN,
-} from '@/stores/projects'
+import { useEffect, useCallback, useRef } from 'react'
+import { useProjectsStore } from '@/stores/projects'
+
+// Polling intervals
+export const POLLING_INTERVAL_ACTIVE = 5000 // 5 seconds when tab is visible
+export const POLLING_INTERVAL_HIDDEN = 60000 // 60 seconds when tab is hidden
 
 interface UsePollingOptions {
   /** Polling interval when tab is visible (default: 5000ms) */
@@ -36,9 +36,34 @@ export function usePolling(options: UsePollingOptions = {}) {
     autoStart = true,
   } = options
 
-  const startPolling = useProjectsStore((state) => state.startPolling)
-  const stopPolling = useProjectsStore((state) => state.stopPolling)
-  const setPollingInterval = useProjectsStore((state) => state.setPollingInterval)
+  const refreshAllHealth = useProjectsStore((state) => state.refreshAllHealth)
+  const intervalRef = useRef<number | null>(null)
+  const currentIntervalMs = useRef(activeInterval)
+
+  const startPolling = useCallback((intervalMs: number) => {
+    // Clear any existing interval
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current)
+    }
+
+    currentIntervalMs.current = intervalMs
+    intervalRef.current = window.setInterval(() => {
+      refreshAllHealth()
+    }, intervalMs)
+  }, [refreshAllHealth])
+
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current !== null) {
+      window.clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+  }, [])
+
+  const setPollingInterval = useCallback((intervalMs: number) => {
+    if (intervalRef.current !== null) {
+      startPolling(intervalMs)
+    }
+  }, [startPolling])
 
   const handleVisibilityChange = useCallback(() => {
     if (document.hidden) {

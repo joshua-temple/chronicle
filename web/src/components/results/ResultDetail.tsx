@@ -42,7 +42,7 @@ export function ResultDetail({ id, onClose }: ResultDetailProps) {
           {/* Summary */}
           <div className="grid grid-cols-4 gap-4">
             <div className="rounded-lg border border-border p-3 text-center">
-              <div className="text-2xl font-bold">{result.total_scenarios}</div>
+              <div className="text-2xl font-bold">{result.totalScenarios}</div>
               <div className="text-xs text-muted-foreground">Total</div>
             </div>
             <div className="rounded-lg border border-border p-3 text-center">
@@ -73,12 +73,12 @@ export function ResultDetail({ id, onClose }: ResultDetailProps) {
                 <div key={index} className="rounded-lg border border-border p-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      {scenario.state === 'completed' ? (
+                      {scenario.state === 'passed' ? (
                         <CheckCircle2 className="h-5 w-5 text-green-500" />
                       ) : (
                         <XCircle className="h-5 w-5 text-red-500" />
                       )}
-                      <span className="font-medium">{scenario.scenario_name}</span>
+                      <span className="font-medium">{scenario.scenarioName}</span>
                     </div>
                     <span className="text-sm text-muted-foreground">{scenario.duration}</span>
                   </div>
@@ -90,15 +90,15 @@ export function ResultDetail({ id, onClose }: ResultDetailProps) {
                   )}
 
                   {/* Flow results */}
-                  {scenario.flow_results && scenario.flow_results.length > 0 && (
+                  {scenario.flowResults && scenario.flowResults.length > 0 && (
                     <div className="mt-3 space-y-1">
-                      {scenario.flow_results.map((flow, flowIndex) => (
+                      {scenario.flowResults.map((flow: { name: string; type: string; state: string; duration: string }, flowIndex: number) => (
                         <div
                           key={flowIndex}
                           className="flex items-center justify-between text-sm py-1 px-2 rounded hover:bg-secondary/50"
                         >
                           <div className="flex items-center gap-2">
-                            {flow.state === 'completed' ? (
+                            {flow.state === 'passed' ? (
                               <CheckCircle2 className="h-4 w-4 text-green-500" />
                             ) : (
                               <XCircle className="h-4 w-4 text-red-500" />

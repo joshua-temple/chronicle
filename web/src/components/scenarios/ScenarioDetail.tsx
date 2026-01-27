@@ -75,7 +75,7 @@ export function ScenarioDetail({ name, onClose }: ScenarioDetailProps) {
                       {index + 1}
                     </span>
                     <div>
-                      <div className="font-medium">{step.name || step.component}</div>
+                      <div className="font-medium">{step.name || step.plugin}</div>
                       <div className="text-xs text-muted-foreground">{step.type}</div>
                     </div>
                   </div>

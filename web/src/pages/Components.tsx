@@ -26,6 +26,8 @@ const TYPE_COLORS: Record<Component['type'], string> = {
   task: 'bg-purple-500/20 text-purple-400',
   validation: 'bg-amber-500/20 text-amber-400',
   teardown: 'bg-rose-500/20 text-rose-400',
+  step: 'bg-green-500/20 text-green-400',
+  rollup: 'bg-cyan-500/20 text-cyan-400',
 }
 
 export function Components() {
@@ -164,7 +166,7 @@ function ComponentCard({ component, onSelect, searchQuery = '' }: ComponentCardP
         {/* Tags */}
         {component.tags && component.tags.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-1">
-            {component.tags.slice(0, 3).map((tag) => (
+            {component.tags.slice(0, 3).map((tag: string) => (
               <Badge key={tag} variant="secondary" className="text-xs">
                 {tag}
               </Badge>
@@ -252,7 +254,7 @@ function ComponentDetail({ name, onClose }: ComponentDetailProps) {
               <div>
                 <h4 className="mb-2 font-semibold">Tags</h4>
                 <div className="flex flex-wrap gap-2">
-                  {component.tags.map((tag) => (
+                  {component.tags.map((tag: string) => (
                     <Badge key={tag} variant="secondary">
                       {tag}
                     </Badge>
@@ -266,7 +268,7 @@ function ComponentDetail({ name, onClose }: ComponentDetailProps) {
               <div>
                 <h4 className="mb-2 font-semibold">Produces</h4>
                 <div className="flex flex-wrap gap-2">
-                  {component.produces.map((item) => (
+                  {component.produces.map((item: string) => (
                     <Badge key={item} variant="outline" className="text-green-400 border-green-400/50">
                       {item}
                     </Badge>
@@ -280,7 +282,7 @@ function ComponentDetail({ name, onClose }: ComponentDetailProps) {
               <div>
                 <h4 className="mb-2 font-semibold">Requires</h4>
                 <div className="flex flex-wrap gap-2">
-                  {component.requires.map((item) => (
+                  {component.requires.map((item: string) => (
                     <Badge key={item} variant="outline" className="text-amber-400 border-amber-400/50">
                       {item}
                     </Badge>
@@ -294,16 +296,16 @@ function ComponentDetail({ name, onClose }: ComponentDetailProps) {
               <h4 className="mb-2 font-semibold">Source File</h4>
               <div className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm">
                 <FileCode className="h-4 w-4 text-muted-foreground" />
-                <code className="text-muted-foreground">{component.source_file}</code>
+                <code className="text-muted-foreground">{component.sourceFile}</code>
               </div>
             </div>
 
             {/* Scenarios using this component */}
-            {component.scenarios && component.scenarios.length > 0 && (
+            {component.usedInScenarios && component.usedInScenarios.length > 0 && (
               <div>
                 <h4 className="mb-2 font-semibold">Used in Scenarios</h4>
                 <div className="space-y-2">
-                  {component.scenarios.map((scenario) => (
+                  {component.usedInScenarios.map((scenario: string) => (
                     <div
                       key={scenario}
                       className="flex items-center gap-2 rounded-lg border border-border p-3 text-sm"

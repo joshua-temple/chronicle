@@ -153,7 +153,7 @@ export const useNavigationStore = create<NavigationState>((set, get) => ({
     })
   },
 
-  navigateToSettings: (level, id) => {
+  navigateToSettings: (level, _id) => {
     if (level === 'global') {
       set({ level: 'global', globalView: 'settings' })
     } else if (level === 'project') {

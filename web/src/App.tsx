@@ -4,6 +4,7 @@ import { Loader2 } from 'lucide-react'
 import { Layout } from '@/components/layout/Layout'
 import { Dashboard } from '@/pages/Dashboard'
 import { Scenarios } from '@/pages/Scenarios'
+import { Suites } from '@/pages/Suites'
 import { Results } from '@/pages/Results'
 import { Components } from '@/pages/Components'
 import { ConfigEditor } from '@/pages/ConfigEditor'
@@ -19,6 +20,10 @@ function Runs() {
 /**
  * Mode Detector component
  * Detects whether the app is running in standalone or daemon mode
+ *
+ * IMPORTANT: The UI always loads regardless of daemon detection.
+ * The UI is designed to be a controller for multiple daemons/projects.
+ * When no daemon is detected, it defaults to standalone mode for project management.
  */
 function ModeDetector({ children }: { children: React.ReactNode }) {
   const mode = useMode()
@@ -28,6 +33,7 @@ function ModeDetector({ children }: { children: React.ReactNode }) {
     detectMode()
   }, [detectMode])
 
+  // Show brief loading state only during initial detection
   if (mode === 'detecting') {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -36,19 +42,9 @@ function ModeDetector({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (mode === 'disconnected') {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-xl font-semibold">Not Connected</h1>
-          <p className="text-muted-foreground mt-2">
-            Start Chronicle with <code className="bg-muted px-1 rounded">chronicle ui</code> or <code className="bg-muted px-1 rounded">chronicle daemon</code>
-          </p>
-        </div>
-      </div>
-    )
-  }
-
+  // Always render children - UI should always be accessible
+  // The disconnected state is handled within the app by showing
+  // project/daemon management UI instead of blocking
   return <>{children}</>
 }
 
@@ -103,6 +99,7 @@ function DaemonRoutes() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/scenarios" element={<Scenarios />} />
+          <Route path="/suites" element={<Suites />} />
           <Route path="/runs" element={<Runs />} />
           <Route path="/results" element={<Results />} />
           <Route path="/components" element={<Components />} />
@@ -115,14 +112,19 @@ function DaemonRoutes() {
 /**
  * App Router
  * Renders routes based on detected mode
+ *
+ * When disconnected, defaults to standalone mode for project management.
+ * This allows users to configure projects even without a running daemon.
  */
 function AppRouter() {
   const mode = useMode()
 
-  if (mode === 'standalone') {
+  // Standalone mode or disconnected - show project management UI
+  if (mode === 'standalone' || mode === 'disconnected') {
     return <StandaloneRoutes />
   }
 
+  // Daemon mode - full functionality
   return <DaemonRoutes />
 }
 

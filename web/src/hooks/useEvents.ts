@@ -1,9 +1,7 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   useEventsStore,
-  selectRecentEvents,
-  selectEventsByType,
-  selectActiveRunsArray,
   type StoredEvent,
   type ActiveRun,
   type ConnectionState,
@@ -15,9 +13,11 @@ import type { SSEEventType } from '@/api/events'
  * Returns events, connection state, and actions
  */
 export function useEvents() {
-  const events = useEventsStore((state) => state.events)
+  const events = useEventsStore(useShallow((state) => state.events))
   const connectionState = useEventsStore((state) => state.connectionState)
-  const activeRuns = useEventsStore((state) => selectActiveRunsArray(state))
+  const activeRuns = useEventsStore(
+    useShallow((state) => Array.from(state.activeRuns.values()))
+  )
   const clearEvents = useEventsStore((state) => state.clearEvents)
 
   return {
@@ -30,16 +30,20 @@ export function useEvents() {
 
 /**
  * Hook to get recent events with a specified limit
+ * Uses shallow comparison to prevent infinite re-renders
  */
 export function useRecentEvents(limit = 10): StoredEvent[] {
-  return useEventsStore((state) => selectRecentEvents(state, limit))
+  const events = useEventsStore(useShallow((state) => state.events))
+  return useMemo(() => events.slice(0, limit), [events, limit])
 }
 
 /**
  * Hook to get events filtered by type
+ * Uses shallow comparison to prevent infinite re-renders
  */
 export function useEventsByType(type: SSEEventType): StoredEvent[] {
-  return useEventsStore((state) => selectEventsByType(state, type))
+  const events = useEventsStore(useShallow((state) => state.events))
+  return useMemo(() => events.filter((event) => event.type === type), [events, type])
 }
 
 /**
@@ -51,9 +55,12 @@ export function useConnectionState(): ConnectionState {
 
 /**
  * Hook to get active runs from SSE events
+ * Uses shallow comparison to prevent infinite re-renders
  */
 export function useActiveRunsFromEvents(): ActiveRun[] {
-  return useEventsStore((state) => selectActiveRunsArray(state))
+  return useEventsStore(
+    useShallow((state) => Array.from(state.activeRuns.values()))
+  )
 }
 
 /**

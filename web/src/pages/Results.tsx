@@ -25,7 +25,7 @@ export function Results() {
         <span className="text-muted-foreground">{data?.count || 0} total</span>
       </div>
 
-      {data?.results?.length === 0 ? (
+      {!data?.results || data.results.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             No results yet. Run a scenario to see results here.
@@ -84,7 +84,7 @@ function ResultRow({
           <div className="font-medium">{id}</div>
           {result && (
             <div className="text-sm text-muted-foreground">
-              {result.passed}/{result.total_scenarios} passed • {result.duration}
+              {result.passed}/{result.totalScenarios} passed • {result.duration}
             </div>
           )}
         </div>

@@ -8,57 +8,70 @@ import { AddProjectModal } from './AddProjectModal'
 import {
   useProjectsStore,
   useProjects,
-  useDiscoveredProjects,
-  useProjectsLoading,
-  useProjectsError,
 } from '@/stores/projects'
-import { usePolling } from '@/hooks/usePolling'
+import type { Project } from '@/api/types'
 
 export function ProjectSelector() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isDiscovering, setIsDiscovering] = useState(false)
 
   const projects = useProjects()
-  const discovered = useDiscoveredProjects()
-  const loading = useProjectsLoading()
-  const error = useProjectsError()
+  const discovered = useProjectsStore(state => state.discovered)
+  const loading = useProjectsStore(state => state.loading)
+  const discovering = useProjectsStore(state => state.discovering)
+  const error = useProjectsStore(state => state.error)
 
   const {
     addProject,
     removeProject,
-    launchProject,
-    stopProject,
+    connectProject,
+    disconnectProject,
     setActiveProject,
-    discover,
+    runDiscovery,
+    addDiscovered,
     clearError,
-    fetchProjects,
+    loadProjects,
+    connectAll,
   } = useProjectsStore()
 
-  // Start polling for project status updates (handles visibility changes automatically)
-  usePolling()
-
-  // Discover projects on mount
+  // Load projects on mount
   useEffect(() => {
-    discover()
-  }, [discover])
+    loadProjects()
+  }, [loadProjects])
+
+  // Auto-connect to all projects on mount
+  useEffect(() => {
+    if (projects.length > 0) {
+      connectAll()
+    }
+  }, []) // Only run once on mount
 
   const handleRefresh = useCallback(async () => {
-    await fetchProjects()
-  }, [fetchProjects])
+    await connectAll()
+  }, [connectAll])
 
   const handleDiscover = useCallback(async () => {
     setIsDiscovering(true)
     try {
-      await discover()
+      await runDiscovery()
     } finally {
       setIsDiscovering(false)
     }
-  }, [discover])
+  }, [runDiscovery])
 
   const handleAddProject = useCallback(
-    async (project: { name: string; path?: string; remoteUrl?: string }) => {
+    async (projectData: { name: string; path?: string; remoteUrl?: string }) => {
+      // Convert modal output to the store's expected format
+      // For remote projects, remoteUrl is the daemon URL
+      // For local projects, the path could be used to construct a localhost URL or stored for reference
+      const daemonUrl = projectData.remoteUrl || `http://localhost:8080`
+
       // addProject will throw if it fails, allowing the modal to handle the error
-      await addProject(project)
+      addProject({
+        name: projectData.name,
+        daemonUrl: daemonUrl,
+        description: projectData.path ? `Project path: ${projectData.path}` : undefined,
+      })
       // Only close on success
       setIsAddModalOpen(false)
     },
@@ -73,15 +86,15 @@ export function ProjectSelector() {
   )
 
   const handleAddDiscoveredProject = useCallback(
-    async (project: { name: string; path?: string }) => {
-      await addProject(project)
+    (project: Project) => {
+      addDiscovered(project)
     },
-    [addProject]
+    [addDiscovered]
   )
 
   // Filter out discovered projects that are already registered
-  const registeredPaths = new Set(projects.map((p) => p.path).filter(Boolean))
-  const filteredDiscovered = discovered.filter((p) => !registeredPaths.has(p.path))
+  const registeredUrls = new Set(projects.map((p) => p.daemonUrl))
+  const filteredDiscovered = discovered.filter((p) => !registeredUrls.has(p.daemonUrl))
 
   return (
     <div className="min-h-screen bg-background">
@@ -147,7 +160,7 @@ export function ProjectSelector() {
           <EmptyState
             variant="empty"
             title="No projects yet"
-            description="Add a Chronicle project to get started. You can also search for existing Chronicle projects on your system."
+            description="Add a Chronicle project to get started. You can also search for existing Chronicle daemons on your network."
             action={{
               label: 'Add Project',
               onClick: () => setIsAddModalOpen(true),
@@ -162,8 +175,8 @@ export function ProjectSelector() {
                   key={project.id}
                   project={project}
                   onOpen={handleOpen}
-                  onLaunch={launchProject}
-                  onStop={stopProject}
+                  onConnect={connectProject}
+                  onDisconnect={disconnectProject}
                   onRemove={removeProject}
                   disabled={loading}
                 />
@@ -179,16 +192,16 @@ export function ProjectSelector() {
               <div>
                 <h2 className="text-lg font-semibold">Discovered Projects</h2>
                 <p className="text-sm text-muted-foreground">
-                  Chronicle projects found on your system
+                  Chronicle daemons found on your network
                 </p>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleDiscover}
-                disabled={isDiscovering || loading}
+                disabled={isDiscovering || discovering || loading}
               >
-                <Search className={`h-4 w-4 mr-2 ${isDiscovering ? 'animate-pulse' : ''}`} />
+                <Search className={`h-4 w-4 mr-2 ${isDiscovering || discovering ? 'animate-pulse' : ''}`} />
                 Scan Again
               </Button>
             </div>
@@ -211,10 +224,10 @@ export function ProjectSelector() {
             <Button
               variant="ghost"
               onClick={handleDiscover}
-              disabled={isDiscovering || loading}
+              disabled={isDiscovering || discovering || loading}
             >
-              <Search className={`h-4 w-4 mr-2 ${isDiscovering ? 'animate-pulse' : ''}`} />
-              Scan for Chronicle projects
+              <Search className={`h-4 w-4 mr-2 ${isDiscovering || discovering ? 'animate-pulse' : ''}`} />
+              Scan for Chronicle daemons
             </Button>
           </div>
         )}
@@ -259,8 +272,8 @@ function ProjectCardSkeleton() {
 
 // Compact card for discovered projects
 interface DiscoveredProjectCardProps {
-  project: { id: string; name: string; path?: string }
-  onAdd: (project: { name: string; path?: string }) => void
+  project: Project
+  onAdd: (project: Project) => void
   disabled?: boolean
 }
 
@@ -270,12 +283,12 @@ function DiscoveredProjectCard({ project, onAdd, disabled }: DiscoveredProjectCa
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h3 className="font-medium text-foreground">{project.name}</h3>
-          <p className="text-sm text-muted-foreground truncate">{project.path}</p>
+          <p className="text-sm text-muted-foreground truncate">{project.daemonUrl}</p>
         </div>
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onAdd({ name: project.name, path: project.path })}
+          onClick={() => onAdd(project)}
           disabled={disabled}
         >
           <Plus className="h-4 w-4 mr-1" />

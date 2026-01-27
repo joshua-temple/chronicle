@@ -1,33 +1,32 @@
 import { useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Play, Square, Trash2, ExternalLink, Globe, Folder, RefreshCw, AlertTriangle } from 'lucide-react'
+import { Trash2, ExternalLink, Globe, RefreshCw, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Project, ProjectState } from '@/stores/projects'
+import type { Project, ProjectConnectionStatus } from '@/api/types'
 
 interface ProjectCardProps {
   project: Project
   onOpen: (id: string) => void
-  onLaunch: (id: string) => Promise<void>
-  onStop: (id: string) => Promise<void>
-  onRemove: (id: string) => Promise<void>
+  onConnect: (id: string) => Promise<void>
+  onDisconnect: (id: string) => void
+  onRemove: (id: string) => void
   disabled?: boolean
+  error?: string
 }
 
-const STATUS_COLORS: Record<ProjectState, string> = {
-  running: 'bg-green-500',
-  stopped: 'bg-gray-400',
-  starting: 'bg-yellow-500 animate-pulse',
-  unhealthy: 'bg-red-500',
-  unknown: 'bg-gray-300',
+const STATUS_COLORS: Record<ProjectConnectionStatus, string> = {
+  connected: 'bg-green-500',
+  connecting: 'bg-yellow-500 animate-pulse',
+  disconnected: 'bg-gray-400',
+  error: 'bg-red-500',
 }
 
-const STATUS_LABELS: Record<ProjectState, string> = {
-  running: 'Running',
-  stopped: 'Stopped',
-  starting: 'Starting',
-  unhealthy: 'Unhealthy',
-  unknown: 'Unknown',
+const STATUS_LABELS: Record<ProjectConnectionStatus, string> = {
+  connected: 'Connected',
+  connecting: 'Connecting...',
+  disconnected: 'Disconnected',
+  error: 'Error',
 }
 
 function formatRelativeTime(dateString?: string): string {
@@ -51,56 +50,40 @@ function formatRelativeTime(dateString?: string): string {
 export function ProjectCard({
   project,
   onOpen,
-  onLaunch,
-  onStop,
+  onConnect,
+  onDisconnect,
   onRemove,
   disabled = false,
+  error,
 }: ProjectCardProps) {
   const [showRemoveConfirm, setShowRemoveConfirm] = useState(false)
-  const [isRetrying, setIsRetrying] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
-  const isLocal = Boolean(project.path)
-  const isRemote = Boolean(project.remoteUrl)
-  const isRunning = project.status.state === 'running'
-  const isStarting = project.status.state === 'starting'
-  const isUnhealthy = project.status.state === 'unhealthy'
-  const canControl = isLocal && !isStarting && !isRetrying
 
-  // Combined error from status or local operations
-  const displayError = localError || project.status.error
+  const isConnected = project.status === 'connected'
+  const isConnectingStatus = project.status === 'connecting'
+  const hasError = project.status === 'error'
 
-  const handleLaunch = async () => {
+  // Combined error from props or local operations
+  const displayError = localError || error
+
+  const handleConnect = async () => {
     setLocalError(null)
-    setIsRetrying(true)
+    setIsConnecting(true)
     try {
-      await onLaunch(project.id)
-    } catch (error) {
-      // Error is already handled by the store, but we can show local feedback
-      if (error instanceof Error) {
-        setLocalError(error.message)
+      await onConnect(project.id)
+    } catch (err) {
+      if (err instanceof Error) {
+        setLocalError(err.message)
       }
     } finally {
-      setIsRetrying(false)
+      setIsConnecting(false)
     }
   }
 
-  const handleRetryLaunch = async () => {
+  const handleDisconnect = () => {
     setLocalError(null)
-    await handleLaunch()
-  }
-
-  const handleStop = async () => {
-    setLocalError(null)
-    setIsRetrying(true)
-    try {
-      await onStop(project.id)
-    } catch (error) {
-      if (error instanceof Error) {
-        setLocalError(error.message)
-      }
-    } finally {
-      setIsRetrying(false)
-    }
+    onDisconnect(project.id)
   }
 
   const handleRemoveClick = () => {
@@ -126,45 +109,41 @@ export function ProjectCard({
             <div
               className={cn(
                 'mt-1.5 h-3 w-3 shrink-0 rounded-full',
-                STATUS_COLORS[project.status.state]
+                STATUS_COLORS[project.status]
               )}
-              title={STATUS_LABELS[project.status.state]}
+              title={STATUS_LABELS[project.status]}
               role="status"
-              aria-label={`Status: ${STATUS_LABELS[project.status.state]}`}
+              aria-label={`Status: ${STATUS_LABELS[project.status]}`}
             />
 
             {/* Project Info */}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold text-foreground truncate">{project.name}</h3>
-                {isRemote && (
-                  <span title="Remote daemon">
-                    <Globe className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  </span>
-                )}
-                {isLocal && (
-                  <span title="Local project">
-                    <Folder className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
-                  </span>
-                )}
+                <span title="Daemon URL">
+                  <Globe className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
+                </span>
               </div>
               <p className="text-sm text-muted-foreground truncate">
-                {project.path || project.remoteUrl}
+                {project.daemonUrl}
               </p>
+              {project.description && (
+                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                  {project.description}
+                </p>
+              )}
             </div>
           </div>
 
           {/* Right: Status Info */}
           <div className="text-right shrink-0">
             <p className="text-sm font-medium">
-              {isRetrying
-                ? 'Processing...'
-                : isRunning && project.status.port
-                  ? `Running on :${project.status.port}`
-                  : STATUS_LABELS[project.status.state]}
+              {isConnecting || isConnectingStatus
+                ? 'Connecting...'
+                : STATUS_LABELS[project.status]}
             </p>
             <p className="text-xs text-muted-foreground">
-              Last run: {formatRelativeTime(project.lastOpened)}
+              Last connected: {formatRelativeTime(project.lastConnected)}
             </p>
           </div>
         </div>
@@ -177,15 +156,15 @@ export function ProjectCard({
               <div className="flex-1 min-w-0">
                 <p className="text-sm text-destructive">{displayError}</p>
               </div>
-              {isLocal && !isRunning && (
+              {!isConnected && (
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handleRetryLaunch}
-                  disabled={disabled || isRetrying}
+                  onClick={handleConnect}
+                  disabled={disabled || isConnecting}
                   className="shrink-0"
                 >
-                  <RefreshCw className={cn('h-3 w-3 mr-1', isRetrying && 'animate-spin')} />
+                  <RefreshCw className={cn('h-3 w-3 mr-1', isConnecting && 'animate-spin')} />
                   Retry
                 </Button>
               )}
@@ -228,46 +207,43 @@ export function ProjectCard({
                 <Trash2 className="h-4 w-4" />
               </Button>
 
-              {canControl && (
-                isRunning ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleStop}
-                    disabled={disabled || isRetrying}
-                  >
-                    <Square className="h-4 w-4 mr-1" />
-                    Stop
-                  </Button>
-                ) : isUnhealthy ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRetryLaunch}
-                    disabled={disabled || isRetrying}
-                  >
-                    <RefreshCw className={cn('h-4 w-4 mr-1', isRetrying && 'animate-spin')} />
-                    Retry
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLaunch}
-                    disabled={disabled || isRetrying}
-                  >
-                    <Play className={cn('h-4 w-4 mr-1', isRetrying && 'animate-spin')} />
-                    {isRetrying ? 'Launching...' : 'Launch'}
-                  </Button>
-                )
+              {isConnected ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDisconnect}
+                  disabled={disabled}
+                >
+                  Disconnect
+                </Button>
+              ) : hasError ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleConnect}
+                  disabled={disabled || isConnecting}
+                >
+                  <RefreshCw className={cn('h-4 w-4 mr-1', isConnecting && 'animate-spin')} />
+                  Retry
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleConnect}
+                  disabled={disabled || isConnecting || isConnectingStatus}
+                >
+                  <RefreshCw className={cn('h-4 w-4 mr-1', (isConnecting || isConnectingStatus) && 'animate-spin')} />
+                  {isConnecting || isConnectingStatus ? 'Connecting...' : 'Connect'}
+                </Button>
               )}
 
               <Button
                 variant="default"
                 size="sm"
                 onClick={() => onOpen(project.id)}
-                disabled={disabled || isRetrying || (!isRunning && !isRemote)}
-                title={!isRunning && !isRemote ? 'Launch project first' : undefined}
+                disabled={disabled || isConnecting || !isConnected}
+                title={!isConnected ? 'Connect to project first' : undefined}
               >
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Open

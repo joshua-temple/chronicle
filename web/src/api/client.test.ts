@@ -75,14 +75,14 @@ describe('API Client', () => {
 
       await apiRequest('/runs', {
         method: 'POST',
-        body: JSON.stringify({ scenario_name: 'test' }),
+        body: JSON.stringify({ scenarioName: 'test' }),
       })
 
       expect(mockFetch).toHaveBeenCalledWith(
         '/api/v1/runs',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify({ scenario_name: 'test' }),
+          body: JSON.stringify({ scenarioName: 'test' }),
         })
       )
     })
@@ -255,17 +255,17 @@ describe('API Client', () => {
         json: () => Promise.resolve({
           id: 'run-123',
           status: 'running',
-          scenario_id: 'test-scenario',
+          scenarioId: 'test-scenario',
         }),
       })
 
       const result = await apiRequest<{
         id: string
         status: string
-        scenario_id: string
+        scenarioId: string
       }>('/runs', {
         method: 'POST',
-        body: JSON.stringify({ scenario_name: 'test-scenario' }),
+        body: JSON.stringify({ scenarioName: 'test-scenario' }),
       })
 
       expect(result.id).toBe('run-123')

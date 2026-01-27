@@ -59,7 +59,7 @@ export function ScenarioCard({ scenario, onRun, onSelect, searchQuery = '' }: Sc
             )}
           </div>
           <div className="flex items-center text-sm text-muted-foreground">
-            {scenario.flow_count} {scenario.flow_count === 1 ? 'step' : 'steps'}
+            {scenario.flowCount} {scenario.flowCount === 1 ? 'step' : 'steps'}
             <ChevronRight className="ml-1 h-4 w-4" />
           </div>
         </div>
