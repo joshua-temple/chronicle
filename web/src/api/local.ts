@@ -13,12 +13,22 @@ export interface ChronicleConfig {
   name?: string
   version: string
   scenarios?: ScenarioConfig[]
+  suites?: Record<string, SuiteConfig>
   infrastructure?: Record<string, unknown>
   chaos_profiles?: Record<string, ChaosProfile>
   mock_profiles?: Record<string, MockProfile>
   flags?: Record<string, unknown>
   execution?: Record<string, unknown>
   results?: Record<string, unknown>
+}
+
+export interface SuiteConfig {
+  description?: string
+  scenarios?: string[]
+  tags?: string[]
+  exclude_tags?: string[]
+  parallel?: number
+  fail_fast?: boolean
 }
 
 export interface ScenarioConfig {
