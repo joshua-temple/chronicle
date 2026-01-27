@@ -19,20 +19,20 @@ const mockResult = {
   scenarios: [
     {
       scenarioName: 'Test Scenario 1',
-      state: 'completed',
+      state: 'passed',
       duration: '30s',
       error: null,
-      flow_results: [
+      flowResults: [
         {
           name: 'Setup Database',
           type: 'setup',
-          state: 'completed',
+          state: 'passed',
           duration: '5s',
         },
         {
           name: 'Run Tests',
           type: 'task',
-          state: 'completed',
+          state: 'passed',
           duration: '20s',
         },
       ],
@@ -42,11 +42,11 @@ const mockResult = {
       state: 'failed',
       duration: '45s',
       error: 'Assertion failed: expected 200 but got 500',
-      flow_results: [
+      flowResults: [
         {
           name: 'Setup API',
           type: 'setup',
-          state: 'completed',
+          state: 'passed',
           duration: '10s',
         },
         {

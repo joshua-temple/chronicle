@@ -144,7 +144,7 @@ describe('Events Store', () => {
         timestamp: '2024-01-01T00:00:00Z',
         data: {
           run_id: 'run-123',
-          scenarioId: 'test-scenario',
+          scenario_id: 'test-scenario',
         },
       }
 
@@ -162,7 +162,7 @@ describe('Events Store', () => {
       useEventsStore.getState().handleEvent('run:started', {
         type: 'run:started' as const,
         timestamp: '2024-01-01T00:00:00Z',
-        data: { run_id: 'run-123', scenarioId: 'test' },
+        data: { run_id: 'run-123', scenario_id: 'test' },
       })
 
       // Then update progress
@@ -186,7 +186,7 @@ describe('Events Store', () => {
       useEventsStore.getState().handleEvent('run:started', {
         type: 'run:started' as const,
         timestamp: '2024-01-01T00:00:00Z',
-        data: { run_id: 'run-123', scenarioId: 'test' },
+        data: { run_id: 'run-123', scenario_id: 'test' },
       })
 
       expect(useEventsStore.getState().activeRuns.has('run-123')).toBe(true)
@@ -206,7 +206,7 @@ describe('Events Store', () => {
       useEventsStore.getState().handleEvent('run:started', {
         type: 'run:started' as const,
         timestamp: '2024-01-01T00:00:00Z',
-        data: { run_id: 'run-123', scenarioId: 'test' },
+        data: { run_id: 'run-123', scenario_id: 'test' },
       })
 
       // Fail the run
@@ -224,7 +224,7 @@ describe('Events Store', () => {
       useEventsStore.getState().handleEvent('run:started', {
         type: 'run:started' as const,
         timestamp: '2024-01-01T00:00:00Z',
-        data: { run_id: 'run-123', scenarioId: 'test' },
+        data: { run_id: 'run-123', scenario_id: 'test' },
       })
 
       // Cancel the run

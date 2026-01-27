@@ -324,11 +324,11 @@ describe('ScenarioDetail Component', () => {
       expect(screen.getByText('Named Step')).toBeInTheDocument()
     })
 
-    it('displays component name when step name is not present', () => {
+    it('displays plugin name when step name is not present', () => {
       vi.mocked(useScenariosModule.useScenario).mockReturnValue({
         data: {
           ...mockScenario,
-          flow: [{ component: 'component-name', type: 'setup' }],
+          flow: [{ plugin: 'plugin-name', type: 'setup' }],
         },
         isLoading: false,
         error: null,
@@ -336,7 +336,7 @@ describe('ScenarioDetail Component', () => {
 
       render(<ScenarioDetail name="test" onClose={mockOnClose} />)
 
-      expect(screen.getByText('component-name')).toBeInTheDocument()
+      expect(screen.getByText('plugin-name')).toBeInTheDocument()
     })
 
     it('shows singular step text for single step', () => {
