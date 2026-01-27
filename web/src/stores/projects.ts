@@ -1,368 +1,286 @@
 import { create } from 'zustand'
-
-export type ProjectState = 'unknown' | 'stopped' | 'starting' | 'running' | 'unhealthy'
-
-export interface ProjectStatus {
-  state: ProjectState
-  port?: number
-  version?: string
-  error?: string
-}
-
-export interface Project {
-  id: string
-  name: string
-  path?: string
-  remoteUrl?: string
-  addedAt: string
-  lastOpened?: string
-  lastScenarios?: string[]
-  preferences?: Record<string, string>
-  autoDiscovered?: boolean
-  status: ProjectStatus
-}
-
-// Polling interval constants
-export const POLLING_INTERVAL_ACTIVE = 5000 // 5s for active view
-export const POLLING_INTERVAL_BACKGROUND = 30000 // 30s for background projects
-export const POLLING_INTERVAL_HIDDEN = 60000 // 60s when tab hidden
+import { subscribeWithSelector } from 'zustand/middleware'
+import {
+  getStoredProjects,
+  addStoredProject,
+  updateStoredProject,
+  removeStoredProject,
+  connectToProject,
+  discoverProjects,
+} from '@/api/projects'
+import type { Project, ProjectHealth } from '@/api/types'
 
 interface ProjectsState {
+  // Data
   projects: Project[]
   discovered: Project[]
-  loading: boolean
-  error: string | null
+  health: Map<string, ProjectHealth>
+
+  // Selection
   activeProjectId: string | null
+  activeSuiteId: string | null
 
-  // Polling state
-  pollingIntervalId: ReturnType<typeof setInterval> | null
-  pollingIntervalMs: number
+  // Loading states
+  loading: boolean
+  discovering: boolean
+  connecting: Map<string, boolean>
 
-  fetchProjects: () => Promise<void>
-  addProject: (project: Partial<Project>) => Promise<void>
-  removeProject: (id: string) => Promise<void>
-  updateProject: (id: string, updates: Partial<Project>) => Promise<void>
-  launchProject: (id: string) => Promise<void>
-  stopProject: (id: string) => Promise<void>
+  // Error state
+  error: string | null
+
+  // Actions
+  loadProjects: () => void
+  addProject: (project: Omit<Project, 'id' | 'addedAt' | 'status'>) => Project
+  removeProject: (id: string) => void
+  updateProject: (id: string, updates: Partial<Project>) => void
+
+  // Connection
+  connectProject: (id: string) => Promise<void>
+  disconnectProject: (id: string) => void
+  connectAll: () => Promise<void>
+
+  // Discovery
+  runDiscovery: () => Promise<void>
+  addDiscovered: (project: Project) => void
+  dismissDiscovered: (id: string) => void
+
+  // Selection
   setActiveProject: (id: string | null) => void
-  discover: () => Promise<void>
+  setActiveSuite: (id: string | null) => void
+
+  // Health
+  refreshHealth: (id: string) => Promise<void>
+  refreshAllHealth: () => Promise<void>
+
+  // Utility
+  getProject: (id: string) => Project | undefined
+  getActiveProject: () => Project | undefined
+  getConnectedProjects: () => Project[]
   clearError: () => void
-
-  // Polling methods
-  startPolling: (intervalMs?: number) => void
-  stopPolling: () => void
-  setPollingInterval: (intervalMs: number) => void
 }
 
-const API_BASE = '/api/standalone'
+export const useProjectsStore = create<ProjectsState>()(
+  subscribeWithSelector((set, get) => ({
+    // Initial state
+    projects: [],
+    discovered: [],
+    health: new Map(),
+    activeProjectId: null,
+    activeSuiteId: null,
+    loading: false,
+    discovering: false,
+    connecting: new Map(),
+    error: null,
 
-// Operation flags to prevent concurrent requests
-let isFetching = false
-let isDiscovering = false
+    // Load projects from localStorage
+    loadProjects: () => {
+      const projects = getStoredProjects()
+      set({ projects })
+    },
 
-// Track if polling is being set up to prevent multiple intervals
-let isSettingUpPolling = false
+    // Add a new project
+    addProject: (projectData) => {
+      const project = addStoredProject(projectData)
+      set(state => ({ projects: [...state.projects, project] }))
+      return project
+    },
 
-// Export for testing purposes
-export const _resetOperationFlags = () => {
-  isFetching = false
-  isDiscovering = false
-  isSettingUpPolling = false
-}
+    // Remove a project
+    removeProject: (id) => {
+      removeStoredProject(id)
+      set(state => ({
+        projects: state.projects.filter(p => p.id !== id),
+        activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
+        health: new Map([...state.health].filter(([k]) => k !== id)),
+      }))
+    },
 
-// Helper to extract error message from API response
-async function extractErrorMessage(response: Response, defaultMessage: string): Promise<string> {
-  try {
-    const data = await response.json()
-    if (data.error && typeof data.error === 'string') {
-      return data.error
-    }
-  } catch {
-    // Could not parse JSON response
-  }
-  // Fall back to status text or default
-  if (response.statusText && response.statusText !== 'OK') {
-    return `${defaultMessage}: ${response.statusText}`
-  }
-  return defaultMessage
-}
-
-// Helper to get user-friendly error messages for network errors
-function getNetworkErrorMessage(error: unknown, context: string): string {
-  if (error instanceof TypeError && error.message === 'Failed to fetch') {
-    return `Cannot connect to server. Please ensure Chronicle is running.`
-  }
-  if (error instanceof Error) {
-    // Check for common network errors
-    const msg = error.message.toLowerCase()
-    if (msg.includes('timeout') || msg.includes('timed out')) {
-      return `${context}: request timed out. The server may be busy or unreachable.`
-    }
-    if (msg.includes('network') || msg.includes('connection')) {
-      return `${context}: network error. Please check your connection.`
-    }
-    return error.message
-  }
-  return `${context}: an unexpected error occurred`
-}
-
-export const useProjectsStore = create<ProjectsState>((set, get) => ({
-  // Initial state
-  projects: [],
-  discovered: [],
-  loading: false,
-  error: null,
-  activeProjectId: null,
-
-  // Polling state
-  pollingIntervalId: null,
-  pollingIntervalMs: POLLING_INTERVAL_ACTIVE,
-
-  // Fetch all projects
-  fetchProjects: async () => {
-    if (isFetching) return
-    isFetching = true
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/projects`)
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to fetch projects')
-        throw new Error(errorMsg)
+    // Update a project
+    updateProject: (id, updates) => {
+      const updated = updateStoredProject(id, updates)
+      if (updated) {
+        set(state => ({
+          projects: state.projects.map(p => p.id === id ? updated : p),
+        }))
       }
-      const data = await response.json().catch(() => {
-        throw new Error('Failed to parse server response')
-      })
-      set({ projects: data.projects || [], loading: false })
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to fetch projects')
-      set({ error: message, loading: false })
-    } finally {
-      isFetching = false
-    }
-  },
+    },
 
-  // Add a new project
-  addProject: async (project) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/projects`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(project),
-      })
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to add project')
-        throw new Error(errorMsg)
+    // Connect to a project's daemon
+    connectProject: async (id) => {
+      const project = get().projects.find(p => p.id === id)
+      if (!project) return
+
+      set(state => ({
+        connecting: new Map(state.connecting).set(id, true),
+      }))
+
+      try {
+        const health = await connectToProject(project)
+
+        set(state => {
+          const newHealth = new Map(state.health)
+          newHealth.set(id, health)
+
+          const newConnecting = new Map(state.connecting)
+          newConnecting.delete(id)
+
+          return {
+            health: newHealth,
+            connecting: newConnecting,
+            projects: state.projects.map(p =>
+              p.id === id
+                ? { ...p, status: health.status, lastConnected: new Date().toISOString() }
+                : p
+            ),
+          }
+        })
+
+        // Persist updated status
+        updateStoredProject(id, {
+          status: health.status,
+          lastConnected: new Date().toISOString(),
+        })
+      } catch (error) {
+        set(state => {
+          const newConnecting = new Map(state.connecting)
+          newConnecting.delete(id)
+
+          return {
+            connecting: newConnecting,
+            error: `Failed to connect to ${project.name}`,
+          }
+        })
       }
-      // Refresh projects list after adding - fetchProjects will set loading: false
-      await get().fetchProjects()
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to add project')
-      set({ error: message, loading: false })
-      throw error // Re-throw so caller can handle it
-    }
-  },
+    },
 
-  // Remove a project
-  removeProject: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/projects/${id}`, {
-        method: 'DELETE',
+    // Disconnect from a project
+    disconnectProject: (id) => {
+      set(state => {
+        const newHealth = new Map(state.health)
+        newHealth.delete(id)
+
+        return {
+          health: newHealth,
+          projects: state.projects.map(p =>
+            p.id === id ? { ...p, status: 'disconnected' as const } : p
+          ),
+        }
       })
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to remove project')
-        throw new Error(errorMsg)
+
+      updateStoredProject(id, { status: 'disconnected' })
+    },
+
+    // Connect to all projects
+    connectAll: async () => {
+      const { projects, connectProject } = get()
+      await Promise.allSettled(projects.map(p => connectProject(p.id)))
+    },
+
+    // Run auto-discovery
+    runDiscovery: async () => {
+      set({ discovering: true })
+
+      try {
+        const discovered = await discoverProjects()
+        set({ discovered, discovering: false })
+      } catch {
+        set({ discovering: false, error: 'Discovery failed' })
       }
-      // Refresh projects list after removing
-      await get().fetchProjects()
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to remove project')
-      set({ error: message, loading: false })
-      throw error // Re-throw so caller can handle it
-    }
-  },
+    },
 
-  // Update a project
-  updateProject: async (id, updates) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/projects/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
+    // Add a discovered project to managed list
+    addDiscovered: (project) => {
+      const added = addStoredProject({
+        name: project.name,
+        daemonUrl: project.daemonUrl,
+        description: project.description,
+        autoDiscovered: true,
       })
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to update project')
-        throw new Error(errorMsg)
-      }
-      // Refresh projects list after updating
-      await get().fetchProjects()
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to update project')
-      set({ error: message, loading: false })
-      throw error // Re-throw so caller can handle it
-    }
-  },
 
-  // Launch daemon for a project
-  launchProject: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/projects/${id}/launch`, {
-        method: 'POST',
+      set(state => ({
+        projects: [...state.projects, added],
+        discovered: state.discovered.filter(p => p.id !== project.id),
+      }))
+    },
+
+    // Dismiss a discovered project
+    dismissDiscovered: (id) => {
+      set(state => ({
+        discovered: state.discovered.filter(p => p.id !== id),
+      }))
+    },
+
+    // Set active project
+    setActiveProject: (id) => {
+      set({ activeProjectId: id, activeSuiteId: null })
+    },
+
+    // Set active suite
+    setActiveSuite: (id) => {
+      set({ activeSuiteId: id })
+    },
+
+    // Refresh health for a project
+    refreshHealth: async (id) => {
+      const project = get().projects.find(p => p.id === id)
+      if (!project) return
+
+      const health = await connectToProject(project)
+
+      set(state => {
+        const newHealth = new Map(state.health)
+        newHealth.set(id, health)
+        return { health: newHealth }
       })
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to launch daemon')
-        throw new Error(errorMsg)
-      }
-      // Refresh projects list to get updated status
-      await get().fetchProjects()
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to launch daemon')
-      set({ error: message, loading: false })
-    }
-  },
+    },
 
-  // Stop daemon for a project
-  stopProject: async (id) => {
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/projects/${id}/stop`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to stop daemon')
-        throw new Error(errorMsg)
-      }
-      // Refresh projects list to get updated status
-      await get().fetchProjects()
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to stop daemon')
-      set({ error: message, loading: false })
-      throw error // Re-throw so caller can handle it
-    }
-  },
+    // Refresh health for all projects
+    refreshAllHealth: async () => {
+      const { projects, refreshHealth } = get()
+      await Promise.allSettled(projects.map(p => refreshHealth(p.id)))
+    },
 
-  // Set the active project
-  setActiveProject: (id) => {
-    set({ activeProjectId: id })
-  },
+    // Get a specific project
+    getProject: (id) => {
+      return get().projects.find(p => p.id === id)
+    },
 
-  // Discover Chronicle projects
-  discover: async () => {
-    if (isDiscovering) return
-    isDiscovering = true
-    set({ loading: true, error: null })
-    try {
-      const response = await fetch(`${API_BASE}/discover`, {
-        method: 'POST',
-      })
-      if (!response.ok) {
-        const errorMsg = await extractErrorMessage(response, 'Failed to discover projects')
-        throw new Error(errorMsg)
-      }
-      const data = await response.json().catch(() => {
-        throw new Error('Failed to parse server response')
-      })
-      set({ discovered: data.projects || [], loading: false })
-    } catch (error) {
-      const message = getNetworkErrorMessage(error, 'Failed to discover projects')
-      set({ error: message, loading: false })
-    } finally {
-      isDiscovering = false
-    }
-  },
+    // Get the active project
+    getActiveProject: () => {
+      const { projects, activeProjectId } = get()
+      return projects.find(p => p.id === activeProjectId)
+    },
 
-  // Clear any error state
-  clearError: () => {
-    set({ error: null })
-  },
+    // Get all connected projects
+    getConnectedProjects: () => {
+      return get().projects.filter(p => p.status === 'connected')
+    },
 
-  // Start periodic polling for project status updates
-  startPolling: (intervalMs = POLLING_INTERVAL_ACTIVE) => {
-    const state = get()
-
-    // Prevent multiple polling intervals
-    if (state.pollingIntervalId !== null || isSettingUpPolling) {
-      return
-    }
-
-    isSettingUpPolling = true
-
-    // Fetch immediately, then set up interval
-    get().fetchProjects()
-
-    const intervalId = setInterval(() => {
-      get().fetchProjects()
-    }, intervalMs)
-
-    set({ pollingIntervalId: intervalId, pollingIntervalMs: intervalMs })
-    isSettingUpPolling = false
-  },
-
-  // Stop periodic polling
-  stopPolling: () => {
-    const state = get()
-    if (state.pollingIntervalId !== null) {
-      clearInterval(state.pollingIntervalId)
-      set({ pollingIntervalId: null })
-    }
-  },
-
-  // Adjust polling interval (e.g., when tab visibility changes)
-  setPollingInterval: (intervalMs: number) => {
-    const state = get()
-
-    // Only adjust if currently polling
-    if (state.pollingIntervalId === null) {
-      return
-    }
-
-    // Don't restart if interval hasn't changed
-    if (state.pollingIntervalMs === intervalMs) {
-      return
-    }
-
-    // Clear existing interval
-    clearInterval(state.pollingIntervalId)
-
-    // Set up new interval with updated timing
-    const intervalId = setInterval(() => {
-      get().fetchProjects()
-    }, intervalMs)
-
-    set({ pollingIntervalId: intervalId, pollingIntervalMs: intervalMs })
-  },
-}))
+    // Clear error
+    clearError: () => {
+      set({ error: null })
+    },
+  }))
+)
 
 // Convenience hooks
 export function useProjects() {
-  return useProjectsStore((state) => state.projects)
-}
-
-export function useDiscoveredProjects() {
-  return useProjectsStore((state) => state.discovered)
+  return useProjectsStore(state => state.projects)
 }
 
 export function useActiveProject() {
-  return useProjectsStore((state) => {
-    if (!state.activeProjectId) return null
-    return state.projects.find((p) => p.id === state.activeProjectId) ?? null
+  return useProjectsStore(state => {
+    const { projects, activeProjectId } = state
+    return projects.find(p => p.id === activeProjectId)
   })
 }
 
-export function useProjectsLoading() {
-  return useProjectsStore((state) => state.loading)
+export function useProjectHealth(projectId: string) {
+  return useProjectsStore(state => state.health.get(projectId))
 }
 
-export function useProjectsError() {
-  return useProjectsStore((state) => state.error)
-}
-
-export function usePollingState() {
-  return useProjectsStore((state) => ({
-    isPolling: state.pollingIntervalId !== null,
-    intervalMs: state.pollingIntervalMs,
-  }))
+export function useConnectedProjects() {
+  return useProjectsStore(state =>
+    state.projects.filter(p => p.status === 'connected')
+  )
 }
