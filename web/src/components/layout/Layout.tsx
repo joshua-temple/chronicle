@@ -4,7 +4,6 @@ import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { ToastContainer } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
-import { useMode } from '@/stores/mode'
 import { useActiveProject } from '@/stores/projects'
 
 interface LayoutProps {
@@ -12,12 +11,11 @@ interface LayoutProps {
 }
 
 export function Layout({ onBackToProjects }: LayoutProps) {
-  const mode = useMode()
   const activeProject = useActiveProject()
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar mode={mode} />
+      <Sidebar />
       <div className="ml-64">
         {onBackToProjects && (
           <div className="border-b border-border bg-muted/50 px-6 py-2">
