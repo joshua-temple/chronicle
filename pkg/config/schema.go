@@ -11,6 +11,7 @@ type Config struct {
 	Discovery      DiscoveryConfig           `yaml:"discovery" json:"discovery"`
 	Infrastructure map[string]InfraConfig    `yaml:"infrastructure" json:"infrastructure"`
 	Scenarios      []ScenarioConfig          `yaml:"scenarios" json:"scenarios"`
+	Suites         map[string]SuiteConfig    `yaml:"suites" json:"suites"`
 	ChaosProfiles  map[string]ChaosProfile   `yaml:"chaos_profiles" json:"chaos_profiles"`
 	MockProfiles   map[string]MockProfile    `yaml:"mock_profiles" json:"mock_profiles"`
 	Flags          FlagsConfig               `yaml:"flags" json:"flags"`
@@ -112,6 +113,16 @@ type ScenarioConfig struct {
 	// Inheritance
 	Extends  string `yaml:"extends,omitempty" json:"extends,omitempty"`
 	Abstract bool   `yaml:"abstract,omitempty" json:"abstract,omitempty"`
+}
+
+// SuiteConfig configures a predefined test suite.
+type SuiteConfig struct {
+	Description string   `yaml:"description,omitempty" json:"description,omitempty"`
+	Scenarios   []string `yaml:"scenarios,omitempty" json:"scenarios,omitempty"`
+	Tags        []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	ExcludeTags []string `yaml:"exclude_tags,omitempty" json:"exclude_tags,omitempty"`
+	Parallel    int      `yaml:"parallel,omitempty" json:"parallel,omitempty"`
+	FailFast    bool     `yaml:"fail_fast,omitempty" json:"fail_fast,omitempty"`
 }
 
 // FlowItemConfig configures a single flow item.

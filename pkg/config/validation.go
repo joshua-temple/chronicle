@@ -97,6 +97,13 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	// Validate suites
+	for name, suite := range c.Suites {
+		if errs := validateSuiteConfig(name, &suite, scenarioNames); len(errs) > 0 {
+			errors = append(errors, errs...)
+		}
+	}
+
 	// Validate execution config
 	if errs := validateExecutionConfig(&c.Execution); len(errs) > 0 {
 		errors = append(errors, errs...)
@@ -338,6 +345,47 @@ func validateMockProfile(name string, profile *MockProfile) ValidationErrors {
 	return errors
 }
 
+func validateSuiteConfig(name string, suite *SuiteConfig, scenarioNames map[string]bool) ValidationErrors {
+	var errors ValidationErrors
+	prefix := fmt.Sprintf("suites.%s", name)
+
+	// Validate suite name
+	if !isValidIdentifier(name) {
+		errors = append(errors, ValidationError{
+			Field:   prefix,
+			Message: "suite name must be a valid identifier (alphanumeric and hyphens)",
+		})
+	}
+
+	// A suite must have either scenarios or tags
+	if len(suite.Scenarios) == 0 && len(suite.Tags) == 0 {
+		errors = append(errors, ValidationError{
+			Field:   prefix,
+			Message: "suite must specify either scenarios or tags",
+		})
+	}
+
+	// Validate scenario references
+	for i, scenarioName := range suite.Scenarios {
+		if !scenarioNames[scenarioName] {
+			errors = append(errors, ValidationError{
+				Field:   fmt.Sprintf("%s.scenarios[%d]", prefix, i),
+				Message: fmt.Sprintf("references non-existent scenario: %s", scenarioName),
+			})
+		}
+	}
+
+	// Validate parallelism
+	if suite.Parallel < 0 {
+		errors = append(errors, ValidationError{
+			Field:   prefix + ".parallel",
+			Message: "parallel cannot be negative",
+		})
+	}
+
+	return errors
+}
+
 func validateExecutionConfig(exec *ExecutionConfig) ValidationErrors {
 	var errors ValidationErrors
 	prefix := "execution"
@@ -440,6 +488,7 @@ func DefaultConfig() *Config {
 			Paths: []string{"."},
 		},
 		Infrastructure: make(map[string]InfraConfig),
+		Suites:         make(map[string]SuiteConfig),
 		ChaosProfiles:  make(map[string]ChaosProfile),
 		MockProfiles:   make(map[string]MockProfile),
 		Options:        make(map[string]OptionConfig),

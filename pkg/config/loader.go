@@ -17,6 +17,7 @@ func Load(paths ...string) (*Config, error) {
 
 	config := &Config{
 		Infrastructure: make(map[string]InfraConfig),
+		Suites:         make(map[string]SuiteConfig),
 		ChaosProfiles:  make(map[string]ChaosProfile),
 		MockProfiles:   make(map[string]MockProfile),
 		Options:        make(map[string]OptionConfig),
@@ -110,6 +111,14 @@ func mergeConfig(dst, src *Config) {
 
 	// Scenarios - append
 	dst.Scenarios = append(dst.Scenarios, src.Scenarios...)
+
+	// Suites - merge maps
+	if dst.Suites == nil {
+		dst.Suites = make(map[string]SuiteConfig)
+	}
+	for k, v := range src.Suites {
+		dst.Suites[k] = v
+	}
 
 	// ChaosProfiles - merge maps
 	if dst.ChaosProfiles == nil {
@@ -271,6 +280,87 @@ func (c *Config) GetNonAbstractScenarios() []ScenarioConfig {
 		if !s.Abstract {
 			result = append(result, s)
 		}
+	}
+	return result
+}
+
+// GetSuite returns a suite by name.
+func (c *Config) GetSuite(name string) (*SuiteConfig, bool) {
+	if c.Suites == nil {
+		return nil, false
+	}
+	suite, ok := c.Suites[name]
+	if !ok {
+		return nil, false
+	}
+	return &suite, true
+}
+
+// GetSuiteScenarios returns all scenario names that belong to a suite.
+// It combines explicitly named scenarios with tag-filtered scenarios.
+func (c *Config) GetSuiteScenarios(name string) ([]string, bool) {
+	suite, ok := c.GetSuite(name)
+	if !ok {
+		return nil, false
+	}
+
+	// Start with explicitly named scenarios
+	scenarioSet := make(map[string]bool)
+	for _, s := range suite.Scenarios {
+		scenarioSet[s] = true
+	}
+
+	// Add scenarios matching tags
+	if len(suite.Tags) > 0 {
+		tagSet := make(map[string]bool)
+		for _, t := range suite.Tags {
+			tagSet[t] = true
+		}
+		for _, s := range c.Scenarios {
+			if s.Abstract {
+				continue
+			}
+			for _, t := range s.Tags {
+				if tagSet[t] {
+					scenarioSet[s.Name] = true
+					break
+				}
+			}
+		}
+	}
+
+	// Remove scenarios matching exclude tags
+	if len(suite.ExcludeTags) > 0 {
+		excludeSet := make(map[string]bool)
+		for _, t := range suite.ExcludeTags {
+			excludeSet[t] = true
+		}
+		for _, s := range c.Scenarios {
+			for _, t := range s.Tags {
+				if excludeSet[t] {
+					delete(scenarioSet, s.Name)
+					break
+				}
+			}
+		}
+	}
+
+	// Convert to slice
+	var result []string
+	for name := range scenarioSet {
+		result = append(result, name)
+	}
+	return result, true
+}
+
+// ListSuites returns all suite names.
+func (c *Config) ListSuites() []string {
+	if c.Suites == nil {
+		return nil
+	}
+	var result []string
+	for name := range c.Suites {
+		result = append(result, name)
 	}
 	return result
 }

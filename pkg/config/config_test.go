@@ -461,3 +461,239 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("expected default storage type 'file', got %s", config.Results.Storage.Type)
 	}
 }
+
+func TestSuiteConfiguration(t *testing.T) {
+	t.Run("loads suites from config", func(t *testing.T) {
+		dir := t.TempDir()
+		configPath := filepath.Join(dir, "chronicle.yaml")
+		err := os.WriteFile(configPath, []byte(`
+name: test-project
+version: "1.0"
+
+scenarios:
+  - name: smoke-1
+    tags: [smoke]
+    flow:
+      - setup: CreateUser
+  - name: smoke-2
+    tags: [smoke]
+    flow:
+      - task: DoSomething
+  - name: integration-1
+    tags: [integration]
+    flow:
+      - validation: CheckResult
+
+suites:
+  smoke-suite:
+    description: "Run smoke tests"
+    tags: [smoke]
+    parallel: 2
+    fail_fast: true
+  full-suite:
+    description: "Run all tests"
+    scenarios: [smoke-1, smoke-2, integration-1]
+  mixed-suite:
+    description: "Mixed selection"
+    scenarios: [smoke-1]
+    tags: [integration]
+    exclude_tags: []
+`), 0644)
+		if err != nil {
+			t.Fatalf("failed to write config: %v", err)
+		}
+
+		config, err := Load(configPath)
+		if err != nil {
+			t.Fatalf("Load failed: %v", err)
+		}
+
+		if len(config.Suites) != 3 {
+			t.Errorf("expected 3 suites, got %d", len(config.Suites))
+		}
+
+		// Check smoke-suite
+		smokeSuite, ok := config.GetSuite("smoke-suite")
+		if !ok {
+			t.Fatal("expected to find smoke-suite")
+		}
+		if smokeSuite.Description != "Run smoke tests" {
+			t.Errorf("expected description 'Run smoke tests', got %s", smokeSuite.Description)
+		}
+		if smokeSuite.Parallel != 2 {
+			t.Errorf("expected parallel 2, got %d", smokeSuite.Parallel)
+		}
+		if !smokeSuite.FailFast {
+			t.Error("expected FailFast to be true")
+		}
+
+		// Check full-suite
+		fullSuite, ok := config.GetSuite("full-suite")
+		if !ok {
+			t.Fatal("expected to find full-suite")
+		}
+		if len(fullSuite.Scenarios) != 3 {
+			t.Errorf("expected 3 scenarios in full-suite, got %d", len(fullSuite.Scenarios))
+		}
+	})
+
+	t.Run("GetSuiteScenarios resolves by scenarios", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s2", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s3", Tags: []string{"integration"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"explicit": {Scenarios: []string{"s1", "s3"}},
+			},
+		}
+
+		scenarios, ok := config.GetSuiteScenarios("explicit")
+		if !ok {
+			t.Fatal("expected to find suite")
+		}
+		if len(scenarios) != 2 {
+			t.Errorf("expected 2 scenarios, got %d", len(scenarios))
+		}
+	})
+
+	t.Run("GetSuiteScenarios resolves by tags", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s2", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s3", Tags: []string{"integration"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"by-tag": {Tags: []string{"smoke"}},
+			},
+		}
+
+		scenarios, ok := config.GetSuiteScenarios("by-tag")
+		if !ok {
+			t.Fatal("expected to find suite")
+		}
+		if len(scenarios) != 2 {
+			t.Errorf("expected 2 scenarios with smoke tag, got %d", len(scenarios))
+		}
+	})
+
+	t.Run("GetSuiteScenarios respects exclude_tags", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Tags: []string{"smoke", "slow"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s2", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s3", Tags: []string{"integration"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"fast-smoke": {Tags: []string{"smoke"}, ExcludeTags: []string{"slow"}},
+			},
+		}
+
+		scenarios, ok := config.GetSuiteScenarios("fast-smoke")
+		if !ok {
+			t.Fatal("expected to find suite")
+		}
+		if len(scenarios) != 1 {
+			t.Errorf("expected 1 scenario (excluding slow), got %d", len(scenarios))
+		}
+		if scenarios[0] != "s2" {
+			t.Errorf("expected scenario s2, got %s", scenarios[0])
+		}
+	})
+
+	t.Run("GetSuiteScenarios combines scenarios and tags", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s2", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+				{Name: "s3", Tags: []string{"integration"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"combined": {Scenarios: []string{"s3"}, Tags: []string{"smoke"}},
+			},
+		}
+
+		scenarios, ok := config.GetSuiteScenarios("combined")
+		if !ok {
+			t.Fatal("expected to find suite")
+		}
+		if len(scenarios) != 3 {
+			t.Errorf("expected 3 scenarios (s3 + smoke tagged), got %d", len(scenarios))
+		}
+	})
+
+	t.Run("ListSuites returns all suite names", func(t *testing.T) {
+		config := &Config{
+			Suites: map[string]SuiteConfig{
+				"suite-a": {},
+				"suite-b": {},
+				"suite-c": {},
+			},
+		}
+
+		names := config.ListSuites()
+		if len(names) != 3 {
+			t.Errorf("expected 3 suite names, got %d", len(names))
+		}
+	})
+
+	t.Run("GetSuiteScenarios returns false for non-existent suite", func(t *testing.T) {
+		config := &Config{Suites: make(map[string]SuiteConfig)}
+		_, ok := config.GetSuiteScenarios("non-existent")
+		if ok {
+			t.Error("expected false for non-existent suite")
+		}
+	})
+}
+
+func TestSuiteValidation(t *testing.T) {
+	t.Run("validates suite with non-existent scenario", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"bad-suite": {Scenarios: []string{"s1", "non-existent"}},
+			},
+		}
+
+		err := config.Validate()
+		if err == nil {
+			t.Error("expected validation error for suite referencing non-existent scenario")
+		}
+	})
+
+	t.Run("validates suite with invalid parallel value", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"bad-suite": {Scenarios: []string{"s1"}, Parallel: -1},
+			},
+		}
+
+		err := config.Validate()
+		if err == nil {
+			t.Error("expected validation error for negative parallel value")
+		}
+	})
+
+	t.Run("valid suite passes validation", func(t *testing.T) {
+		config := &Config{
+			Scenarios: []ScenarioConfig{
+				{Name: "s1", Tags: []string{"smoke"}, Flow: []FlowItemConfig{{Setup: "S"}}},
+			},
+			Suites: map[string]SuiteConfig{
+				"good-suite": {Scenarios: []string{"s1"}, Tags: []string{"smoke"}, Parallel: 2},
+			},
+		}
+
+		err := config.Validate()
+		if err != nil {
+			t.Errorf("expected no validation error, got: %v", err)
+		}
+	})
+}
