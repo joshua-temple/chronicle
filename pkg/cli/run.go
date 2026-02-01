@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joshua-temple/chronicle/pkg/config"
+	"github.com/joshua-temple/chronicle/pkg/daemon/client"
 	"github.com/joshua-temple/chronicle/pkg/discovery"
 	"github.com/joshua-temple/chronicle/pkg/execution"
 	"github.com/joshua-temple/chronicle/pkg/results"
@@ -23,7 +25,9 @@ var runCmd = &cobra.Command{
 	Long: `Run one or more scenarios.
 
 If no scenarios are specified, all scenarios in the configuration are run.
-Use --tags to filter scenarios by tags.`,
+Use --tags to filter scenarios by tags.
+Use --suite to run a predefined suite of scenarios.
+Use --daemon to run via the Chronicle daemon (auto-starts if needed).`,
 	RunE: runScenarios,
 }
 
@@ -40,6 +44,9 @@ func init() {
 	runCmd.Flags().StringP("output", "o", "", "output directory for results")
 	runCmd.Flags().StringP("format", "f", "text", "output format (text, json, junit)")
 	runCmd.Flags().Bool("dry-run", false, "show what would run without executing")
+	runCmd.Flags().StringP("suite", "S", "", "run a predefined suite")
+	runCmd.Flags().Bool("daemon", false, "run via daemon (auto-starts if needed)")
+	runCmd.Flags().Bool("list-suites", false, "list available suites and exit")
 }
 
 func runScenarios(cmd *cobra.Command, args []string) error {
@@ -56,6 +63,9 @@ func runScenarios(cmd *cobra.Command, args []string) error {
 	outputDir, _ := cmd.Flags().GetString("output")
 	format, _ := cmd.Flags().GetString("format")
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
+	suite, _ := cmd.Flags().GetString("suite")
+	useDaemon, _ := cmd.Flags().GetBool("daemon")
+	listSuites, _ := cmd.Flags().GetBool("list-suites")
 	verbose := viper.GetBool("verbose")
 
 	// Parse flag key=value pairs
@@ -65,6 +75,16 @@ func runScenarios(cmd *cobra.Command, args []string) error {
 	cfg, err := loadConfig()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
+	}
+
+	// Handle --list-suites
+	if listSuites {
+		return printSuites(cfg)
+	}
+
+	// If using daemon mode, delegate to daemon client
+	if useDaemon {
+		return runViaDaemon(cmd.Context(), cfg, args, suite, tags, excludeTags, flags, parallel, failFast, timeout, verbose)
 	}
 
 	// Discover components
@@ -85,8 +105,29 @@ func runScenarios(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to resolve scenarios: %w", err)
 	}
 
+	// If suite specified, get scenarios from it
+	var scenarioNames []string
+	if suite != "" {
+		suiteScenarios, ok := cfg.GetSuiteScenarios(suite)
+		if !ok {
+			return fmt.Errorf("suite not found: %s", suite)
+		}
+		scenarioNames = suiteScenarios
+		// Also get suite config for parallel/fail-fast settings
+		if suiteCfg, ok := cfg.GetSuite(suite); ok {
+			if suiteCfg.Parallel > 0 {
+				parallel = suiteCfg.Parallel
+			}
+			if suiteCfg.FailFast {
+				failFast = suiteCfg.FailFast
+			}
+		}
+	}
+
 	// Filter scenarios by name, tags, etc.
-	scenarios := filterScenariosByArgs(allScenarios, args, tags, excludeTags)
+	// If suite was specified, combine with args
+	allNames := append(scenarioNames, args...)
+	scenarios := filterScenariosByArgs(allScenarios, allNames, tags, excludeTags)
 	if len(scenarios) == 0 {
 		fmt.Println("No scenarios to run.")
 		return nil
@@ -157,6 +198,117 @@ func runScenarios(cmd *cobra.Command, args []string) error {
 	// Check for failures
 	if runResult.Stats.Failed > 0 {
 		return fmt.Errorf("%d scenario(s) failed", runResult.Stats.Failed)
+	}
+
+	return nil
+}
+
+func printSuites(cfg *config.Config) error {
+	suites := cfg.ListSuites()
+	if len(suites) == 0 {
+		fmt.Println("No suites defined.")
+		return nil
+	}
+
+	fmt.Println("Available suites:")
+	for _, name := range suites {
+		suite, _ := cfg.GetSuite(name)
+		scenarios, _ := cfg.GetSuiteScenarios(name)
+		fmt.Printf("\n  %s\n", name)
+		if suite.Description != "" {
+			fmt.Printf("    Description: %s\n", suite.Description)
+		}
+		if len(suite.Tags) > 0 {
+			fmt.Printf("    Tags: %s\n", strings.Join(suite.Tags, ", "))
+		}
+		if len(suite.Scenarios) > 0 {
+			fmt.Printf("    Scenarios: %s\n", strings.Join(suite.Scenarios, ", "))
+		}
+		fmt.Printf("    Total scenarios: %d\n", len(scenarios))
+	}
+	return nil
+}
+
+func runViaDaemon(ctx context.Context, cfg *config.Config, args []string, suite string, tags, excludeTags []string, flags map[string]any, parallel int, failFast bool, timeout time.Duration, verbose bool) error {
+	// Get current working directory for project path
+	projectDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+
+	// Create daemon manager and ensure daemon is running
+	manager := client.NewDaemonManager(client.WithProjectDir(projectDir))
+	daemonClient, err := manager.EnsureDaemon(ctx, true)
+	if err != nil {
+		return fmt.Errorf("daemon not available: %w", err)
+	}
+
+	// Clean up daemon if we started it
+	defer func() {
+		if err := manager.StopDaemon(); err != nil && verbose {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop daemon: %v\n", err)
+		}
+	}()
+
+	// Build the run request
+	req := &client.RunRequest{
+		Flags:       flags,
+		Parallel:    parallel,
+		FailFast:    failFast,
+		Timeout:     timeout.String(),
+	}
+
+	if suite != "" {
+		req.Suite = suite
+	}
+	if len(args) > 0 {
+		req.Scenarios = args
+	}
+	if len(tags) > 0 {
+		req.Tags = tags
+	}
+	if len(excludeTags) > 0 {
+		req.ExcludeTags = excludeTags
+	}
+
+	// Determine if single scenario or batch
+	var runResp *client.RunResponse
+	if len(args) == 1 && suite == "" && len(tags) == 0 {
+		// Single scenario
+		req.ScenarioName = args[0]
+		runResp, err = daemonClient.RunScenario(ctx, req)
+	} else {
+		// Batch run
+		runResp, err = daemonClient.RunBatch(ctx, req)
+	}
+
+	if err != nil {
+		return fmt.Errorf("start run: %w", err)
+	}
+
+	fmt.Printf("Started run %s\n", runResp.ID)
+	if len(runResp.Scenarios) > 0 {
+		fmt.Printf("Running %d scenario(s): %s\n", len(runResp.Scenarios), strings.Join(runResp.Scenarios, ", "))
+	}
+
+	// Wait for completion
+	fmt.Println("Waiting for completion...")
+	result, err := daemonClient.WaitForRun(ctx, runResp.ID, 1*time.Second)
+	if err != nil {
+		return fmt.Errorf("wait for run: %w", err)
+	}
+
+	// Print result
+	fmt.Printf("\nRun %s: %s\n", result.ID, result.Status)
+	if result.Duration != "" {
+		fmt.Printf("Duration: %s\n", result.Duration)
+	}
+	if result.Error != "" {
+		fmt.Printf("Error: %s\n", result.Error)
+	}
+
+	if result.Status == "failed" {
+		return fmt.Errorf("run failed")
 	}
 
 	return nil

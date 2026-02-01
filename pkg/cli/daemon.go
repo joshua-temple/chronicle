@@ -35,7 +35,7 @@ Then interact with the API:
 }
 
 func init() {
-	daemonCmd.Flags().StringP("addr", "a", ":8080", "address to listen on")
+	daemonCmd.Flags().StringP("addr", "a", ":3000", "address to listen on")
 	daemonCmd.Flags().String("api-key", "", "API key for authentication (generated if not provided)")
 	daemonCmd.Flags().Bool("no-auth", false, "disable authentication (not recommended for production)")
 	daemonCmd.Flags().Bool("watch", false, "watch for configuration changes and auto-reload")
@@ -86,31 +86,38 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 
-	// Start server in goroutine
-	errCh := make(chan error, 1)
-	go func() {
-		fmt.Printf("Starting Chronicle daemon on %s\n", addr)
-		if verbose {
-			fmt.Println("Endpoints:")
-			fmt.Println("  GET  /api/v1/health       - Health check")
-			fmt.Println("  POST /api/v1/runs         - Start a run")
-			fmt.Println("  GET  /api/v1/runs         - List runs")
-			fmt.Println("  GET  /api/v1/runs/{id}    - Get run details")
-			fmt.Println("  DELETE /api/v1/runs/{id}  - Cancel run")
-			fmt.Println("  GET  /api/v1/scenarios    - List scenarios")
-			fmt.Println("  GET  /api/v1/scenarios/{name} - Get scenario")
-			fmt.Println("  GET  /api/v1/components   - List components")
-			fmt.Println("  GET  /api/v1/components/{name} - Get component")
-			fmt.Println("  GET  /api/v1/results      - List results")
-			fmt.Println("  GET  /api/v1/results/{id} - Get result")
-			fmt.Println("  DELETE /api/v1/results/{id} - Delete result")
-			fmt.Println("  GET  /api/v1/config       - Get config")
-			fmt.Println("  POST /api/v1/config/reload - Reload config")
+	// Start server with port detection
+	result, err := server.StartWithPortDetection(addr)
+	if err != nil {
+		if err == daemon.ErrDaemonAlreadyRunning {
+			fmt.Printf("Chronicle daemon already running at %s\n", result.ExistingURL)
+			fmt.Println("Use that instance or stop it first.")
+			return nil
 		}
-		if err := server.Start(addr); err != nil {
-			errCh <- err
-		}
-	}()
+		return fmt.Errorf("failed to start server: %w", err)
+	}
+
+	fmt.Printf("Chronicle daemon started on http://localhost:%d\n", result.Port)
+	if verbose {
+		fmt.Println("Endpoints:")
+		fmt.Println("  GET  /api/v1/health       - Health check")
+		fmt.Println("  POST /api/v1/runs         - Start a run")
+		fmt.Println("  POST /api/v1/runs/batch   - Start a batch run")
+		fmt.Println("  GET  /api/v1/runs         - List runs")
+		fmt.Println("  GET  /api/v1/runs/{id}    - Get run details")
+		fmt.Println("  DELETE /api/v1/runs/{id}  - Cancel run")
+		fmt.Println("  GET  /api/v1/suites       - List suites")
+		fmt.Println("  GET  /api/v1/suites/{name} - Get suite")
+		fmt.Println("  GET  /api/v1/scenarios    - List scenarios")
+		fmt.Println("  GET  /api/v1/scenarios/{name} - Get scenario")
+		fmt.Println("  GET  /api/v1/components   - List components")
+		fmt.Println("  GET  /api/v1/components/{name} - Get component")
+		fmt.Println("  GET  /api/v1/results      - List results")
+		fmt.Println("  GET  /api/v1/results/{id} - Get result")
+		fmt.Println("  DELETE /api/v1/results/{id} - Delete result")
+		fmt.Println("  GET  /api/v1/config       - Get config")
+		fmt.Println("  POST /api/v1/config/reload - Reload config")
+	}
 
 	// Setup config watcher if enabled
 	if watch {
@@ -132,12 +139,8 @@ func runDaemon(cmd *cobra.Command, args []string) error {
 	}
 
 	// Wait for shutdown
-	select {
-	case sig := <-sigCh:
-		fmt.Printf("\nReceived %v, shutting down...\n", sig)
-	case err := <-errCh:
-		return fmt.Errorf("server error: %w", err)
-	}
+	sig := <-sigCh
+	fmt.Printf("\nReceived %v, shutting down...\n", sig)
 
 	// Graceful shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
