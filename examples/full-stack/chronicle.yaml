@@ -1,0 +1,312 @@
+# Chronicle Full-Stack Example Configuration
+# Demonstrates all Chronicle features with an e-commerce order flow
+
+name: ecommerce-integration-tests
+version: "1.0"
+
+discovery:
+  paths:
+    - ./components
+
+infrastructure:
+  # In a real project, you would use testcontainers providers
+  # This example uses mock infrastructure for simplicity
+  postgres:
+    type: mock
+    config:
+      host: localhost
+      port: 5432
+      database: ecommerce_test
+
+  redis:
+    type: mock
+    config:
+      host: localhost
+      port: 6379
+
+  kafka:
+    type: mock
+    config:
+      brokers:
+        - localhost:9092
+
+execution:
+  default_timeout: 30s
+  parallelism: 4
+  fail_fast: false
+
+results:
+  storage:
+    path: .chronicle/results
+  formats:
+    - json
+    - text
+
+# Flags that can be used in scenarios
+flags:
+  defaults:
+    environment: local
+    enable_notifications: true
+    payment_provider: stripe
+
+  bundles:
+    ci:
+      environment: ci
+      enable_notifications: false
+
+    production_like:
+      environment: staging
+      enable_notifications: true
+      payment_provider: stripe
+
+# Chaos profiles for resilience testing
+chaos_profiles:
+  network_latency:
+    name: Network Latency Simulation
+    description: Simulates slow network connections
+    faults:
+      - type: latency
+        target: payment_service
+        delay: 500ms
+        jitter: 100ms
+
+  database_failures:
+    name: Database Connection Failures
+    description: Simulates intermittent database failures
+    faults:
+      - type: error
+        target: postgres
+        rate: 0.1  # 10% failure rate
+        error: "connection refused"
+
+  high_load:
+    name: High Load Simulation
+    description: Simulates system under heavy load
+    faults:
+      - type: latency
+        target: "*"
+        delay: 200ms
+      - type: error
+        target: redis
+        rate: 0.05
+
+# Mock profiles for external services
+mock_profiles:
+  happy_path:
+    name: Happy Path
+    description: All external services return success
+    mocks:
+      - service: payment_gateway
+        behavior: success
+        response:
+          status: approved
+          transaction_id: "txn_mock_12345"
+
+      - service: inventory_service
+        behavior: success
+        response:
+          available: true
+          quantity: 100
+
+      - service: notification_service
+        behavior: success
+
+  payment_declined:
+    name: Payment Declined
+    description: Payment gateway declines transaction
+    mocks:
+      - service: payment_gateway
+        behavior: failure
+        response:
+          status: declined
+          reason: "insufficient_funds"
+
+      - service: inventory_service
+        behavior: success
+
+      - service: notification_service
+        behavior: success
+
+  out_of_stock:
+    name: Out of Stock
+    description: Inventory shows item unavailable
+    mocks:
+      - service: payment_gateway
+        behavior: success
+
+      - service: inventory_service
+        behavior: success
+        response:
+          available: false
+          quantity: 0
+
+# Test scenarios
+scenarios:
+  # Base scenario for common setup
+  - name: base_order_flow
+    abstract: true
+    description: Common setup for all order flow tests
+    tags:
+      - order
+      - core
+    flow:
+      - setup: CreateTestUser
+      - setup: CreateTestProduct
+
+  # Happy path order completion
+  - name: complete_order_success
+    extends: base_order_flow
+    description: User successfully completes an order
+    tags:
+      - order
+      - happy-path
+      - smoke
+    timeout: 2m
+    mock_profiles:
+      - happy_path
+    flow:
+      - task: AddItemToCart
+      - task: InitiateCheckout
+      - task: ProcessPayment
+      - validation: VerifyOrderCreated
+      - validation: VerifyInventoryDeducted
+      - validation: VerifyPaymentRecorded
+    teardown:
+      - teardown: CleanupTestOrder
+      - teardown: CleanupTestUser
+
+  # Payment failure scenario
+  - name: payment_declined_flow
+    extends: base_order_flow
+    description: Order fails due to payment decline
+    tags:
+      - order
+      - payment
+      - error-handling
+    mock_profiles:
+      - payment_declined
+    flow:
+      - task: AddItemToCart
+      - task: InitiateCheckout
+      - task: ProcessPayment
+        expect_error: true
+      - validation: VerifyOrderNotCreated
+      - validation: VerifyInventoryNotDeducted
+    teardown:
+      - teardown: CleanupTestUser
+
+  # Out of stock scenario
+  - name: out_of_stock_flow
+    extends: base_order_flow
+    description: Order fails due to out of stock
+    tags:
+      - order
+      - inventory
+      - error-handling
+    mock_profiles:
+      - out_of_stock
+    flow:
+      - task: AddItemToCart
+      - validation: VerifyCartShowsOutOfStock
+    teardown:
+      - teardown: CleanupTestUser
+
+  # Resilience testing with chaos
+  - name: order_with_network_latency
+    extends: base_order_flow
+    description: Order processing under network latency
+    tags:
+      - order
+      - chaos
+      - resilience
+    timeout: 5m
+    chaos_profiles:
+      - network_latency
+    mock_profiles:
+      - happy_path
+    flow:
+      - task: AddItemToCart
+      - task: InitiateCheckout
+      - task: ProcessPayment
+      - validation: VerifyOrderCreated
+      - validation: VerifyPaymentRecorded
+    teardown:
+      - teardown: CleanupTestOrder
+      - teardown: CleanupTestUser
+
+  # Conditional execution based on flags
+  - name: order_with_notifications
+    extends: base_order_flow
+    description: Order with email notifications
+    tags:
+      - order
+      - notifications
+    mock_profiles:
+      - happy_path
+    conditions:
+      flags:
+        enable_notifications: true
+    flow:
+      - task: AddItemToCart
+      - task: InitiateCheckout
+      - task: ProcessPayment
+      - validation: VerifyOrderCreated
+      - task: SendOrderConfirmation
+      - validation: VerifyNotificationSent
+    teardown:
+      - teardown: CleanupTestOrder
+      - teardown: CleanupTestUser
+
+  # Matrix testing for multiple payment providers
+  - name: payment_provider_matrix
+    description: Test order flow with different payment providers
+    tags:
+      - order
+      - payment
+      - matrix
+    matrix:
+      payment_provider:
+        - stripe
+        - paypal
+        - square
+    mock_profiles:
+      - happy_path
+    flow:
+      - setup: CreateTestUser
+      - setup: CreateTestProduct
+      - task: AddItemToCart
+      - task: InitiateCheckout
+      - task: ProcessPayment
+        params:
+          provider: "{{matrix.payment_provider}}"
+      - validation: VerifyOrderCreated
+    teardown:
+      - teardown: CleanupTestOrder
+      - teardown: CleanupTestUser
+
+  # Parallel execution for independent validations
+  - name: comprehensive_order_validation
+    extends: base_order_flow
+    description: Comprehensive order validation with parallel checks
+    tags:
+      - order
+      - comprehensive
+    mock_profiles:
+      - happy_path
+    flow:
+      - task: AddItemToCart
+      - task: InitiateCheckout
+      - task: ProcessPayment
+      - validation: VerifyOrderCreated
+      # These validations can run in parallel
+      - validation: VerifyInventoryDeducted
+        parallel: true
+      - validation: VerifyPaymentRecorded
+        parallel: true
+      - validation: VerifyOrderEventPublished
+        parallel: true
+      - validation: VerifyAnalyticsTracked
+        parallel: true
+    teardown:
+      - teardown: CleanupTestOrder
+      - teardown: CleanupTestUser

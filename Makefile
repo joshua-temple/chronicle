@@ -1,80 +1,49 @@
 # Chronicle Makefile
 
-.PHONY: all test clean build doc lint docker format help examples
+.PHONY: all build web-build web-install clean dev test lint help
 
 # Default target
-all: lint test build
+all: build
 
-# Build the project
-build:
-	@echo "Building Chronicle..."
-	go build -v ./...
+# Build the Go binary (depends on web-build)
+build: web-build
+	go build -o bin/chronicle ./cmd/chronicle
 
-# Run tests
-test:
-	@echo "Running tests..."
-	go test -v ./...
+# Build the web frontend
+web-build: web-install
+	cd web && npm run build
 
-# Run tests with short flag (skips integration tests)
-test-short:
-	@echo "Running short tests..."
-	go test -v -short ./...
-
-# Run only the example tests
-examples:
-	@echo "Running example tests..."
-	cd examples && go test -v ./...
+# Install web dependencies
+web-install:
+	cd web && npm install
 
 # Clean build artifacts
 clean:
-	@echo "Cleaning build artifacts..."
 	rm -rf bin/
-	go clean
+	rm -rf web/dist/
+	rm -rf web/node_modules/
 
-# Format code
-format:
-	@echo "Formatting code..."
-	go fmt ./...
+# Run daemon in development mode (without embedded UI)
+dev:
+	go run ./cmd/chronicle daemon --config chronicle.yaml
 
-# Lint code
+# Run tests
+test:
+	go test ./...
+
+# Run linter
 lint:
-	@echo "Linting code..."
 	golangci-lint run ./...
 
-# Generate documentation
-doc:
-	@echo "Generating documentation..."
-	go doc -all ./...
-
-# Run tests with coverage
-coverage:
-	@echo "Running tests with coverage..."
-	go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out -o coverage.html
-
-# Stop any running infrastructure from tests
-stop-infra:
-	@echo "Stopping test infrastructure..."
-	cd examples && docker-compose down -v
-
-# Build Docker image with test environment
-docker:
-	@echo "Building Docker image..."
-	docker build -t chronicle-test -f Dockerfile.test .
-
-# Help target
+# Help
 help:
 	@echo "Chronicle Makefile targets:"
-	@echo "  all         - Default target: lint, test, and build"
-	@echo "  build       - Build the project"
-	@echo "  test        - Run all tests"
-	@echo "  test-short  - Run tests with -short flag (skips integration tests)"
-	@echo "  examples    - Run only the example tests"
-	@echo "  clean       - Clean build artifacts"
-	@echo "  format      - Format code"
-	@echo "  lint        - Lint code"
-	@echo "  doc         - Generate documentation"
-	@echo "  coverage    - Run tests with coverage"
-	@echo "  stop-infra  - Stop any running infrastructure from tests"
-	@echo "  docker      - Build Docker image with test environment"
-	@echo "  help        - Show this help message"
+	@echo "  all        - Build everything (default)"
+	@echo "  build      - Build the Go binary with embedded web UI"
+	@echo "  web-build  - Build the web frontend"
+	@echo "  web-install- Install web dependencies"
+	@echo "  clean      - Remove build artifacts"
+	@echo "  dev        - Run daemon in development mode"
+	@echo "  test       - Run tests"
+	@echo "  lint       - Run linter"
+	@echo "  help       - Show this help"

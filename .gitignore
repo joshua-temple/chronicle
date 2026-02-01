@@ -60,3 +60,15 @@ Thumbs.db
 *.swp
 
 .claude/
+
+# Chronicle binary
+chronicle
+bin/
+
+# Web build artifacts
+web/dist/
+web/node_modules/
+
+# Local development files
+.playwright-mcp/
+chronicle.yaml

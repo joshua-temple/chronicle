@@ -1,0 +1,79 @@
+name: basic-example
+version: "1.0"
+
+# Discovery configuration
+discovery:
+  paths:
+    - .
+
+# Test scenarios
+scenarios:
+  # Basic checkout flow scenario
+  - name: basic-checkout
+    description: "Basic checkout flow demonstrating core features"
+    timeout: 30s
+    tags: [smoke, checkout]
+    flow:
+      - setup: CreateUser
+      - task: CreateOrder
+      - validation: OrderValid
+
+  # Abstract base scenario for user operations
+  - name: user-operations-base
+    abstract: true
+    description: "Base scenario for user-related tests"
+    tags: [user]
+    flow:
+      - setup: CreateUser
+
+  # Scenario that extends the base
+  - name: user-creates-order
+    extends: user-operations-base
+    description: "User creates an order"
+    tags: [order]
+    flow:
+      - task: CreateOrder
+      - validation: OrderValid
+
+  # Conditional scenario - only runs when CI is set
+  - name: ci-only-checkout
+    description: "Checkout that only runs in CI"
+    skip_unless:
+      - env: CI
+        reason: "This test only runs in CI environment"
+    flow:
+      - setup: CreateUser
+      - task: CreateOrder
+      - validation: OrderValid
+
+  # Parameterized scenario using matrix
+  - name: multi-quantity-order
+    description: "Test orders with different quantities"
+    matrix:
+      quantity: [1, 5, 10]
+    flow:
+      - setup: CreateUser
+      - task: CreateOrder
+        params:
+          quantity: ${{ matrix.quantity }}
+      - validation: OrderValid
+
+# Flag definitions
+flags:
+  definitions:
+    debug:
+      type: bool
+      default: false
+      description: "Enable debug logging"
+
+    verbose:
+      type: bool
+      default: false
+      description: "Enable verbose output"
+
+# Execution configuration
+execution:
+  parallelism: 2
+  default_timeout: 30s
+  teardown_mode: always
+  fail_fast: false
