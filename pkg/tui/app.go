@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/joshua-temple/chronicle/pkg/config"
+	"github.com/joshua-temple/chronicle/pkg/daemon/client"
 	"github.com/joshua-temple/chronicle/pkg/execution"
 	"github.com/joshua-temple/chronicle/pkg/results"
 	"github.com/joshua-temple/chronicle/pkg/scenario"
@@ -25,6 +26,7 @@ type View int
 
 const (
 	ViewScenarios View = iota
+	ViewSuites
 	ViewExecution
 	ViewResults
 	ViewHelp
@@ -50,12 +52,18 @@ type Model struct {
 	// Scenario list
 	scenarioList list.Model
 	scenarios    []*scenario.Scenario
+	selected     map[string]bool // Track selected scenarios for batch run
+
+	// Suite list
+	suitesList list.Model
+	suites     []string
 
 	// Execution state
 	spinner       spinner.Model
 	executing     bool
 	currentResult *execution.ScenarioResult
 	executionLogs []string
+	batchResults  []*execution.ScenarioResult
 
 	// Results view
 	resultsViewport viewport.Model
@@ -63,30 +71,53 @@ type Model struct {
 
 	// Storage
 	storage results.Storage
+
+	// Daemon client
+	daemonManager *client.DaemonManager
+	useDaemon     bool
 }
 
 // ScenarioItem represents a scenario in the list.
 type ScenarioItem struct {
 	scenario *scenario.Scenario
+	selected bool
 }
 
-func (i ScenarioItem) Title() string       { return i.scenario.Name }
+func (i ScenarioItem) Title() string {
+	if i.selected {
+		return "✓ " + i.scenario.Name
+	}
+	return i.scenario.Name
+}
 func (i ScenarioItem) Description() string { return i.scenario.Description }
 func (i ScenarioItem) FilterValue() string { return i.scenario.Name }
 
+// SuiteItem represents a suite in the list.
+type SuiteItem struct {
+	name        string
+	description string
+	count       int
+}
+
+func (i SuiteItem) Title() string       { return i.name }
+func (i SuiteItem) Description() string { return fmt.Sprintf("%s (%d scenarios)", i.description, i.count) }
+func (i SuiteItem) FilterValue() string { return i.name }
+
 // KeyMap defines the keybindings for the TUI.
 type KeyMap struct {
-	Up       key.Binding
-	Down     key.Binding
-	Enter    key.Binding
-	Back     key.Binding
-	Quit     key.Binding
-	Help     key.Binding
-	Tab      key.Binding
-	Run      key.Binding
-	Refresh  key.Binding
-	Filter   key.Binding
-	Select   key.Binding
+	Up        key.Binding
+	Down      key.Binding
+	Enter     key.Binding
+	Back      key.Binding
+	Quit      key.Binding
+	Help      key.Binding
+	Tab       key.Binding
+	Run       key.Binding
+	RunAll    key.Binding
+	RunSelected key.Binding
+	Refresh   key.Binding
+	Filter    key.Binding
+	Select    key.Binding
 }
 
 // DefaultKeyMap returns the default keybindings.
@@ -124,6 +155,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("r"),
 			key.WithHelp("r", "run scenario"),
 		),
+		RunAll: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "run all"),
+		),
+		RunSelected: key.NewBinding(
+			key.WithKeys("s"),
+			key.WithHelp("s", "run selected"),
+		),
 		Refresh: key.NewBinding(
 			key.WithKeys("R"),
 			key.WithHelp("R", "refresh"),
@@ -141,15 +180,15 @@ func DefaultKeyMap() KeyMap {
 
 // ShortHelp returns the short help text.
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Enter, k.Run, k.Tab, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Enter, k.Run, k.RunAll, k.Tab, k.Quit}
 }
 
 // FullHelp returns the full help text.
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Enter, k.Back},
-		{k.Run, k.Refresh, k.Filter},
-		{k.Tab, k.Help, k.Quit},
+		{k.Run, k.RunAll, k.RunSelected, k.Select},
+		{k.Tab, k.Refresh, k.Filter, k.Help, k.Quit},
 	}
 }
 
@@ -182,6 +221,14 @@ func NewModel(cfg *config.Config, executor *execution.Executor, storage results.
 	scenarioList.Styles.Title = styles.Title
 	scenarioList.Styles.TitleBar = lipgloss.NewStyle().Padding(0, 1)
 
+	// Create suites list
+	suitesList := list.New([]list.Item{}, delegate, 0, 0)
+	suitesList.Title = "Suites"
+	suitesList.SetShowStatusBar(true)
+	suitesList.SetFilteringEnabled(true)
+	suitesList.Styles.Title = styles.Title
+	suitesList.Styles.TitleBar = lipgloss.NewStyle().Padding(0, 1)
+
 	// Create viewport for results
 	vp := viewport.New(80, 20)
 	vp.Style = lipgloss.NewStyle().Padding(1)
@@ -196,9 +243,19 @@ func NewModel(cfg *config.Config, executor *execution.Executor, storage results.
 		help:            h,
 		spinner:         s,
 		scenarioList:    scenarioList,
+		suitesList:      suitesList,
 		resultsViewport: vp,
 		executionLogs:   make([]string, 0),
+		selected:        make(map[string]bool),
 	}
+}
+
+// NewModelWithDaemon creates a new TUI model that uses the daemon for execution.
+func NewModelWithDaemon(cfg *config.Config, daemonManager *client.DaemonManager, storage results.Storage) Model {
+	m := NewModel(cfg, nil, storage)
+	m.daemonManager = daemonManager
+	m.useDaemon = true
+	return m
 }
 
 // Init initializes the TUI.
@@ -206,6 +263,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		m.loadScenarios,
+		m.loadSuites,
 		m.loadResults,
 	)
 }
@@ -215,6 +273,10 @@ type scenariosLoadedMsg struct {
 	scenarios []*scenario.Scenario
 }
 
+type suitesLoadedMsg struct {
+	suites []SuiteItem
+}
+
 type resultsLoadedMsg struct {
 	results []*results.RunResult
 }
@@ -222,6 +284,11 @@ type resultsLoadedMsg struct {
 type executionFinishedMsg struct {
 	result *execution.ScenarioResult
 	err    error
+}
+
+type batchExecutionFinishedMsg struct {
+	results []*execution.ScenarioResult
+	err     error
 }
 
 type errMsg struct {
@@ -246,6 +313,25 @@ func (m Model) loadScenarios() tea.Msg {
 	}
 
 	return scenariosLoadedMsg{scenarios: scenarios}
+}
+
+func (m Model) loadSuites() tea.Msg {
+	if m.config == nil {
+		return suitesLoadedMsg{suites: nil}
+	}
+
+	var suites []SuiteItem
+	for _, name := range m.config.ListSuites() {
+		suite, _ := m.config.GetSuite(name)
+		scenarios, _ := m.config.GetSuiteScenarios(name)
+		suites = append(suites, SuiteItem{
+			name:        name,
+			description: suite.Description,
+			count:       len(scenarios),
+		})
+	}
+
+	return suitesLoadedMsg{suites: suites}
 }
 
 func (m Model) loadResults() tea.Msg {
@@ -287,6 +373,43 @@ func (m Model) runScenario(s *scenario.Scenario) tea.Cmd {
 	}
 }
 
+func (m Model) runScenarios(scenarios []*scenario.Scenario) tea.Cmd {
+	return func() tea.Msg {
+		if m.executor == nil {
+			return batchExecutionFinishedMsg{err: fmt.Errorf("no executor configured")}
+		}
+
+		ctx := context.Background()
+		results := m.executor.ExecuteMultiple(ctx, scenarios)
+
+		return batchExecutionFinishedMsg{results: results}
+	}
+}
+
+func (m Model) getSelectedScenarios() []*scenario.Scenario {
+	var result []*scenario.Scenario
+	for _, s := range m.scenarios {
+		if m.selected[s.Name] {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
+func (m *Model) toggleSelection(name string) {
+	m.selected[name] = !m.selected[name]
+}
+
+func (m Model) selectedCount() int {
+	count := 0
+	for _, selected := range m.selected {
+		if selected {
+			count++
+		}
+	}
+	return count
+}
+
 // Update handles messages and updates the model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -307,6 +430,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Cycle through views
 			switch m.view {
 			case ViewScenarios:
+				if len(m.suites) > 0 {
+					m.view = ViewSuites
+				} else {
+					m.view = ViewResults
+				}
+			case ViewSuites:
 				m.view = ViewResults
 			case ViewResults:
 				m.view = ViewScenarios
@@ -328,10 +457,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.view = ViewExecution
 					m.executing = true
 					m.executionLogs = []string{"Starting execution..."}
+					m.batchResults = nil
 					return m, tea.Batch(
 						m.spinner.Tick,
 						m.runScenario(item.scenario),
 					)
+				}
+			}
+
+			if key.Matches(msg, m.keys.Select) {
+				if item, ok := m.scenarioList.SelectedItem().(ScenarioItem); ok {
+					m.toggleSelection(item.scenario.Name)
+					// Update item in list to show selection state
+					m.updateScenarioListSelection()
+				}
+			}
+
+			if key.Matches(msg, m.keys.RunAll) {
+				if len(m.scenarios) > 0 {
+					m.view = ViewExecution
+					m.executing = true
+					m.executionLogs = []string{fmt.Sprintf("Running all %d scenarios...", len(m.scenarios))}
+					m.batchResults = nil
+					return m, tea.Batch(
+						m.spinner.Tick,
+						m.runScenarios(m.scenarios),
+					)
+				}
+			}
+
+			if key.Matches(msg, m.keys.RunSelected) {
+				selected := m.getSelectedScenarios()
+				if len(selected) > 0 {
+					m.view = ViewExecution
+					m.executing = true
+					m.executionLogs = []string{fmt.Sprintf("Running %d selected scenarios...", len(selected))}
+					m.batchResults = nil
+					return m, tea.Batch(
+						m.spinner.Tick,
+						m.runScenarios(selected),
+					)
+				}
+			}
+
+		case ViewSuites:
+			if key.Matches(msg, m.keys.Run) || key.Matches(msg, m.keys.Enter) {
+				if item, ok := m.suitesList.SelectedItem().(SuiteItem); ok {
+					// Get suite scenarios and run them
+					scenarioNames, _ := m.config.GetSuiteScenarios(item.name)
+					var scenarios []*scenario.Scenario
+					for _, name := range scenarioNames {
+						for _, s := range m.scenarios {
+							if s.Name == name {
+								scenarios = append(scenarios, s)
+								break
+							}
+						}
+					}
+					if len(scenarios) > 0 {
+						m.view = ViewExecution
+						m.executing = true
+						m.executionLogs = []string{fmt.Sprintf("Running suite '%s' (%d scenarios)...", item.name, len(scenarios))}
+						m.batchResults = nil
+						return m, tea.Batch(
+							m.spinner.Tick,
+							m.runScenarios(scenarios),
+						)
+					}
 				}
 			}
 
@@ -364,9 +556,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scenarios = msg.scenarios
 		items := make([]list.Item, len(msg.scenarios))
 		for i, s := range msg.scenarios {
-			items[i] = ScenarioItem{scenario: s}
+			items[i] = ScenarioItem{scenario: s, selected: m.selected[s.Name]}
 		}
 		m.scenarioList.SetItems(items)
+
+	case suitesLoadedMsg:
+		suiteItems := make([]list.Item, len(msg.suites))
+		for i, s := range msg.suites {
+			suiteItems[i] = s
+			m.suites = append(m.suites, s.name)
+		}
+		m.suitesList.SetItems(suiteItems)
+
+	case batchExecutionFinishedMsg:
+		m.executing = false
+		m.batchResults = msg.results
+		if msg.err != nil {
+			m.err = msg.err
+			m.executionLogs = append(m.executionLogs, fmt.Sprintf("Error: %v", msg.err))
+		} else {
+			passed := 0
+			failed := 0
+			for _, r := range msg.results {
+				if r.State == execution.StateCompleted {
+					passed++
+				} else {
+					failed++
+				}
+			}
+			m.executionLogs = append(m.executionLogs, fmt.Sprintf("Batch complete! Passed: %d, Failed: %d", passed, failed))
+		}
+		// Reload results
+		cmds = append(cmds, m.loadResults)
 
 	case resultsLoadedMsg:
 		m.resultsList = msg.results
@@ -395,6 +616,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scenarioList, cmd = m.scenarioList.Update(msg)
 		cmds = append(cmds, cmd)
 
+	case ViewSuites:
+		var cmd tea.Cmd
+		m.suitesList, cmd = m.suitesList.Update(msg)
+		cmds = append(cmds, cmd)
+
 	case ViewResults:
 		var cmd tea.Cmd
 		m.resultsViewport, cmd = m.resultsViewport.Update(msg)
@@ -402,6 +628,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *Model) updateScenarioListSelection() {
+	items := make([]list.Item, len(m.scenarios))
+	for i, s := range m.scenarios {
+		items[i] = ScenarioItem{scenario: s, selected: m.selected[s.Name]}
+	}
+	m.scenarioList.SetItems(items)
 }
 
 // View renders the TUI.
@@ -418,6 +652,8 @@ func (m Model) View() string {
 	switch m.view {
 	case ViewScenarios:
 		content = m.viewScenarios()
+	case ViewSuites:
+		content = m.viewSuites()
 	case ViewExecution:
 		content = m.viewExecution()
 	case ViewResults:
@@ -446,6 +682,8 @@ func (m Model) renderHeader() string {
 	switch m.view {
 	case ViewScenarios:
 		viewIndicator = " [Scenarios]"
+	case ViewSuites:
+		viewIndicator = " [Suites]"
 	case ViewExecution:
 		viewIndicator = " [Execution]"
 	case ViewResults:
@@ -464,7 +702,14 @@ func (m Model) renderStatusBar() string {
 	} else if m.err != nil {
 		status = m.styles.Error.Render("Error: " + m.err.Error())
 	} else {
-		status = fmt.Sprintf("%d scenarios | %d results", len(m.scenarios), len(m.resultsList))
+		selectedCount := m.selectedCount()
+		if selectedCount > 0 {
+			status = fmt.Sprintf("%d scenarios | %d selected | %d suites | %d results",
+				len(m.scenarios), selectedCount, len(m.suites), len(m.resultsList))
+		} else {
+			status = fmt.Sprintf("%d scenarios | %d suites | %d results",
+				len(m.scenarios), len(m.suites), len(m.resultsList))
+		}
 	}
 
 	return m.styles.StatusBar.Width(m.width - 4).Render(status)
@@ -474,12 +719,41 @@ func (m Model) viewScenarios() string {
 	return m.scenarioList.View()
 }
 
+func (m Model) viewSuites() string {
+	return m.suitesList.View()
+}
+
 func (m Model) viewExecution() string {
 	var b strings.Builder
 
 	if m.executing {
 		b.WriteString(m.spinner.View())
-		b.WriteString(" Executing scenario...\n\n")
+		b.WriteString(" Executing...\n\n")
+	} else if len(m.batchResults) > 0 {
+		// Show batch results summary
+		passed := 0
+		failed := 0
+		for _, r := range m.batchResults {
+			if r.State == execution.StateCompleted {
+				passed++
+			} else {
+				failed++
+			}
+		}
+		b.WriteString(fmt.Sprintf("Batch Results: %d passed, %d failed\n\n", passed, failed))
+
+		// Show individual results
+		for _, result := range m.batchResults {
+			icon := StatusIcon(result.State.String())
+			style := m.styles.StatusStyle(result.State.String())
+			b.WriteString(style.Render(fmt.Sprintf("  %s %s", icon, result.ScenarioName)))
+			b.WriteString(m.styles.Muted.Render(fmt.Sprintf(" (%s)", result.Duration)))
+			b.WriteString("\n")
+			if result.Error != nil {
+				b.WriteString(m.styles.Error.Render(fmt.Sprintf("    Error: %v", result.Error)))
+				b.WriteString("\n")
+			}
+		}
 	} else if m.currentResult != nil {
 		icon := StatusIcon(m.currentResult.State.String())
 		style := m.styles.StatusStyle(m.currentResult.State.String())
